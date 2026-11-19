@@ -200,8 +200,8 @@ export default function App() {
 
         {/* VIEW 2: Greeting Cards — Những người đàn ông của HUB Network */}
         {activeView === 'portraits' && (
-          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll bg-[#08070d]/58 pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
-            <div className="mx-auto max-w-[1320px]">
+          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll bg-[#08070d]/58 pt-24 pb-28 sm:pt-28 sm:pb-28">
+            <div className="mx-auto max-w-[1320px] px-5 sm:px-10 lg:px-14">
               {/* Section Heading */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between border-b border-[#f5efe2]/20 pb-6">
                 <div>
@@ -216,73 +216,84 @@ export default function App() {
                   <span className="tabular-nums">{MEMBERS.length} thành viên</span>
                 </div>
               </div>
+            </div>
 
-              {/* Greeting Card Grid */}
-              <div className="mt-8 flex flex-wrap justify-center gap-5">
-                {MEMBERS.map((member) => (
-                  <article
-                    key={member.id}
-                    onMouseEnter={() => valleyRef.current?.setAccentTint(member.accentHex)}
-                    onMouseLeave={() => valleyRef.current?.setAccentTint(null)}
-                    className="group relative flex w-full sm:w-[calc(50%-10px)] lg:w-[calc(25%-15px)] flex-col overflow-hidden rounded-lg border border-[#f5efe2]/18 bg-[#0b0a12]/90 transition-transform duration-300 ease-out hover:-translate-y-1.5 hover:border-[#f5efe2]/50"
+            {/* Horizontal Marquee Row (moving Left -> Right) */}
+            <div className="relative mt-10 w-full overflow-hidden py-3">
+              <div className="marquee-ltr-track">
+                {[0, 1].map((loopIdx) => (
+                  <div
+                    key={loopIdx}
+                    aria-hidden={loopIdx === 1}
+                    className="flex shrink-0 items-stretch gap-6 pr-6"
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedMemberId(member.id);
-                        valleyRef.current?.setAccentTint(member.accentHex);
-                        audioRef.current?.playBloomChime();
-                      }}
-                      className="flex flex-1 flex-col text-left focus-visible:outline-none"
-                    >
-                      {/* Cropped 3:4 Portrait */}
-                      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#0a0d14]">
-                        {!brokenImages[member.id] ? (
-                          <img
-                            src={member.portrait}
-                            alt={`Ảnh chân dung ${member.name}`}
-                            referrerPolicy="no-referrer"
-                            onError={() =>
-                              setBrokenImages((prev) => ({ ...prev, [member.id]: true }))
-                            }
-                            className="h-full w-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center">
-                            <Flower2 className="h-8 w-8 text-[#f5efe2]/40" />
-                            <span className="font-display text-2xl uppercase">{member.name}</span>
+                    {MEMBERS.map((member) => (
+                      <article
+                        key={`${loopIdx}-${member.id}`}
+                        onMouseEnter={() => valleyRef.current?.setAccentTint(member.accentHex)}
+                        onMouseLeave={() => valleyRef.current?.setAccentTint(null)}
+                        className="group relative flex w-[260px] sm:w-[290px] shrink-0 flex-col overflow-hidden rounded-lg border border-[#f5efe2]/18 bg-[#0b0a12]/90 transition-transform duration-300 ease-out hover:-translate-y-1.5 hover:border-[#f5efe2]/50"
+                      >
+                        <button
+                          type="button"
+                          tabIndex={loopIdx === 1 ? -1 : 0}
+                          onClick={() => {
+                            setSelectedMemberId(member.id);
+                            valleyRef.current?.setAccentTint(member.accentHex);
+                            audioRef.current?.playBloomChime();
+                          }}
+                          className="flex flex-1 flex-col text-left focus-visible:outline-none"
+                        >
+                          {/* Cropped 3:4 Portrait */}
+                          <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#0a0d14]">
+                            {!brokenImages[member.id] ? (
+                              <img
+                                src={member.portrait}
+                                alt={`Ảnh chân dung ${member.name}`}
+                                referrerPolicy="no-referrer"
+                                onError={() =>
+                                  setBrokenImages((prev) => ({ ...prev, [member.id]: true }))
+                                }
+                                className="h-full w-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center">
+                                <Flower2 className="h-8 w-8 text-[#f5efe2]/40" />
+                                <span className="font-display text-2xl uppercase">{member.name}</span>
+                              </div>
+                            )}
+
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0a12] via-[#0b0a12]/25 to-transparent" />
+
+                            <div className="absolute top-3.5 left-4 right-4 flex items-center justify-between text-[11px] font-medium tracking-[0.18em] uppercase text-[#f5efe2]/88">
+                              <span className="tabular-nums drop-shadow">{member.index}</span>
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{ backgroundColor: member.accentHex }}
+                                aria-hidden="true"
+                              />
+                            </div>
+
+                            <div className="absolute inset-x-4 bottom-3.5">
+                              <h2 className="font-display text-3xl font-normal uppercase leading-none tracking-[-0.01em] text-[#f5efe2]">
+                                {member.name}
+                              </h2>
+                              <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#f5efe2]/82">
+                                {member.epithet}
+                              </p>
+                            </div>
                           </div>
-                        )}
 
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0a12] via-[#0b0a12]/25 to-transparent" />
-
-                        <div className="absolute top-3.5 left-4 right-4 flex items-center justify-between text-[11px] font-medium tracking-[0.18em] uppercase text-[#f5efe2]/88">
-                          <span className="tabular-nums drop-shadow">{member.index}</span>
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{ backgroundColor: member.accentHex }}
-                            aria-hidden="true"
-                          />
-                        </div>
-
-                        <div className="absolute inset-x-4 bottom-3.5">
-                          <h2 className="font-display text-3xl font-normal uppercase leading-none tracking-[-0.01em] text-[#f5efe2]">
-                            {member.name}
-                          </h2>
-                          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#f5efe2]/82">
-                            {member.epithet}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2 border-t border-[#f5efe2]/12 px-4 py-3 text-xs text-[#f5efe2]/78">
-                        <span className="inline-flex items-center gap-1.5 font-medium text-[#f5efe2] transition-transform duration-200 group-hover:translate-x-0.5">
-                          Mở thiệp
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </span>
-                      </div>
-                    </button>
-                  </article>
+                          <div className="flex items-center justify-end gap-2 border-t border-[#f5efe2]/12 px-4 py-3 text-xs text-[#f5efe2]/78">
+                            <span className="inline-flex items-center gap-1.5 font-medium text-[#f5efe2] transition-transform duration-200 group-hover:translate-x-0.5">
+                              Mở thiệp
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </span>
+                          </div>
+                        </button>
+                      </article>
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>

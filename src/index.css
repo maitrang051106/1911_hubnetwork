@@ -138,6 +138,26 @@ select:focus-visible {
   animation: bloomCountPop 0.42s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@keyframes marqueeLeftToRight {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0%, 0, 0);
+  }
+}
+
+.marquee-ltr-track {
+  display: flex;
+  width: max-content;
+  animation: marqueeLeftToRight 38s linear infinite;
+  will-change: transform;
+}
+
+.marquee-ltr-track:hover {
+  animation-play-state: paused;
+}
+
 @media (max-width: 820px) {
   .hero-title {
     font-size: clamp(54px, 14.5vw, 84px);
