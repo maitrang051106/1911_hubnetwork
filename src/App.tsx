@@ -1,0 +1,638 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Flower2, PenLine } from 'lucide-react';
+import { INITIAL_WISHES, MEMBERS, type Member, type WishItem } from './data/members';
+import { NightValleyEngine } from './scene/NightValleyEngine';
+import { AmbientAudioEngine } from './audio/AmbientAudioEngine';
+import { MemberSpotlightModal } from './components/MemberSpotlightModal';
+import { WishComposerModal } from './components/WishComposerModal';
+
+type ActiveView = 'hero' | 'portraits' | 'wishes';
+
+const STORAGE_WISHES_KEY = 'thung-lung-19-11-wishes-v1';
+const STORAGE_BLOOMS_KEY = 'thung-lung-19-11-blooms-v1';
+
+function loadSavedWishes(): WishItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_WISHES_KEY);
+    if (!raw) return INITIAL_WISHES;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch {
+    // Fallback to initial wishes
+  }
+  return INITIAL_WISHES;
+}
+
+function loadSavedBlooms(): Record<string, number> {
+  const defaults: Record<string, number> = {};
+  MEMBERS.forEach((m) => {
+    defaults[m.id] = m.initialBlooms;
+  });
+  try {
+    const raw = localStorage.getItem(STORAGE_BLOOMS_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return { ...defaults, ...parsed };
+    }
+  } catch {
+    // Fallback to defaults
+  }
+  return defaults;
+}
+
+export default function App() {
+  const canvasHostRef = useRef<HTMLDivElement | null>(null);
+  const valleyRef = useRef<NightValleyEngine | null>(null);
+  const audioRef = useRef<AmbientAudioEngine | null>(null);
+
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [loaderMounted, setLoaderMounted] = useState(true);
+  const [uiVisible, setUiVisible] = useState(false);
+  const [isSoundOn, setIsSoundOn] = useState(false);
+
+  const [activeView, setActiveView] = useState<ActiveView>('hero');
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [wishFilterId, setWishFilterId] = useState<string>('all');
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerDefaultRecipient, setComposerDefaultRecipient] = useState<string>('all');
+
+  const [wishes, setWishes] = useState<WishItem[]>(loadSavedWishes);
+  const [bloomCounts, setBloomCounts] = useState<Record<string, number>>(loadSavedBlooms);
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const triggerToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+  }, []);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = window.setTimeout(() => setToastMessage(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
+  // Mount isolated 3D Night Flower Valley engine + procedural Web Audio engine once
+  useEffect(() => {
+    const container = canvasHostRef.current;
+    if (!container) return;
+
+    const audio = new AmbientAudioEngine();
+    audioRef.current = audio;
+
+    const engine = new NightValleyEngine(container, {
+      onLoaded: () => {
+        setIsLoaded(true);
+        window.setTimeout(() => setLoaderMounted(false), 1100);
+      },
+      onIntroDone: () => {
+        setUiVisible(true);
+      },
+    });
+    valleyRef.current = engine;
+
+    // Fallback reveal safety if RAF is throttled in background tab
+    const safetyTimer = window.setTimeout(() => {
+      setIsLoaded(true);
+      setUiVisible(true);
+    }, 1500);
+
+    return () => {
+      clearTimeout(safetyTimer);
+      engine.dispose();
+      valleyRef.current = null;
+      audio.dispose();
+      audioRef.current = null;
+    };
+  }, []);
+
+  // Synchronize 3D valley scroll lock & dispersion state with active UI view/modals
+  useEffect(() => {
+    const engine = valleyRef.current;
+    const audio = audioRef.current;
+    if (!engine) return;
+
+    const overlayActive = activeView !== 'hero' || selectedMemberId !== null || composerOpen;
+    engine.setScrollLocked(overlayActive);
+
+    if (selectedMemberId || composerOpen) {
+      engine.startHoverTransition();
+      audio?.setMuffled(true);
+    } else if (activeView !== 'hero') {
+      engine.stopHoverTransition();
+      audio?.setMuffled(false);
+    } else {
+      engine.stopHoverTransition();
+      engine.setAccentTint(null);
+      audio?.setMuffled(false);
+    }
+  }, [activeView, selectedMemberId, composerOpen]);
+
+  const handleToggleSound = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const muted = audio.toggleMute();
+    setIsSoundOn(!muted);
+  };
+
+  const handleHeroArrowEnter = () => {
+    valleyRef.current?.startHoverTransition();
+    audioRef.current?.setMuffled(true);
+  };
+
+  const handleHeroArrowLeave = () => {
+    if (activeView === 'hero' && !selectedMemberId && !composerOpen) {
+      valleyRef.current?.stopHoverTransition();
+      audioRef.current?.setMuffled(false);
+    }
+  };
+
+  const handleEnterPortraits = () => {
+    valleyRef.current?.triggerCelebrationBurst('#f5d491');
+    audioRef.current?.playBloomChime();
+    setActiveView('portraits');
+  };
+
+  const handleSendBloom = useCallback(
+    (member: Member) => {
+      setBloomCounts((prev) => {
+        const next = { ...prev, [member.id]: (prev[member.id] ?? member.initialBlooms) + 1 };
+        try {
+          localStorage.setItem(STORAGE_BLOOMS_KEY, JSON.stringify(next));
+        } catch {
+          // Ignore storage quota errors
+        }
+        return next;
+      });
+      valleyRef.current?.triggerCelebrationBurst(member.accentHex);
+      audioRef.current?.playBloomChime();
+      triggerToast(`Đã gửi một đóa hoa đêm phát sáng đến ${member.name}`);
+    },
+    [triggerToast]
+  );
+
+  const handleOpenComposer = (recipientId = 'all') => {
+    setSelectedMemberId(null);
+    setComposerDefaultRecipient(recipientId);
+    setComposerOpen(true);
+  };
+
+  const handleSubmitWish = (draft: Omit<WishItem, 'id' | 'createdAt'>) => {
+    const newWish: WishItem = {
+      ...draft,
+      id: `wish-${Date.now()}`,
+      createdAt: '19/11/2026',
+    };
+    setWishes((prev) => {
+      const next = [newWish, ...prev];
+      try {
+        localStorage.setItem(STORAGE_WISHES_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+
+    const recipientMember = MEMBERS.find((m) => m.id === draft.recipientId);
+    valleyRef.current?.triggerCelebrationBurst(recipientMember?.accentHex || '#f5d491');
+    audioRef.current?.playBloomChime();
+    setActiveView('wishes');
+    setWishFilterId(draft.recipientId === 'all' ? 'all' : draft.recipientId);
+    triggerToast(`Đã thả lời chúc gửi tới ${draft.recipientName}`);
+  };
+
+  const selectedMember = useMemo(
+    () => MEMBERS.find((m) => m.id === selectedMemberId) ?? null,
+    [selectedMemberId]
+  );
+
+  const handleCycleMember = (direction: -1 | 1) => {
+    if (!selectedMember) return;
+    const currentIdx = MEMBERS.findIndex((m) => m.id === selectedMember.id);
+    const nextIdx = (currentIdx + direction + MEMBERS.length) % MEMBERS.length;
+    const nextMember = MEMBERS[nextIdx];
+    setSelectedMemberId(nextMember.id);
+    valleyRef.current?.setAccentTint(nextMember.accentHex);
+  };
+
+  const filteredWishes = useMemo(() => {
+    if (wishFilterId === 'all') return wishes;
+    return wishes.filter((w) => w.recipientId === wishFilterId || w.recipientId === 'all');
+  }, [wishes, wishFilterId]);
+
+  const totalBlooms = useMemo(
+    () => Object.values(bloomCounts).reduce((sum, val) => sum + val, 0),
+    [bloomCounts]
+  );
+
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-[#030407] text-[#f5efe2]">
+      {/* Isolated Full-Screen 3D Night Flower Valley WebGL Container */}
+      <div
+        id="valley"
+        ref={canvasHostRef}
+        aria-hidden="true"
+        className="fixed inset-0 z-0"
+      />
+
+      {/* Semantic Interface Layer (pointer-events-none so canvas stays interactive everywhere) */}
+      <div
+        className={`fixed inset-0 z-10 pointer-events-none transition-opacity duration-[1500ms] ease-out ${
+          uiVisible ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {/* Top Bar — Fernhollow 3-Zone Contract */}
+        <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-6 px-[18px] pt-[18px] sm:px-[calc(44*var(--u))] sm:pt-[calc(24*var(--u))]">
+          {/* Zone 1: Single-line Wordmark */}
+          <button
+            type="button"
+            onClick={() => setActiveView('hero')}
+            className="pointer-events-auto whitespace-nowrap shrink-0 text-left text-[20px] sm:text-[calc(26*var(--u))] font-medium tracking-[-0.02em] text-[#f5efe2] transition-opacity hover:opacity-80"
+          >
+            Thung Lũng 19.11
+          </button>
+
+          {/* Zone 2 + Zone 3: Navigation Links & Cream Pill CTA */}
+          <nav
+            aria-label="Điều hướng chính"
+            className="pointer-events-auto flex items-center gap-5 sm:gap-[calc(42*var(--u))] text-[12px] sm:text-[calc(14*var(--u))] font-medium uppercase tracking-[0.16em]"
+          >
+            <button
+              type="button"
+              onClick={() => setActiveView('hero')}
+              className={`hidden md:inline-block whitespace-nowrap shrink-0 transition-opacity ${
+                activeView === 'hero'
+                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/60'
+                  : 'text-[#f5efe2]/75 hover:opacity-65'
+              }`}
+            >
+              Khởi đầu
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('portraits')}
+              className={`whitespace-nowrap shrink-0 transition-opacity ${
+                activeView === 'portraits'
+                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/60'
+                  : 'text-[#f5efe2]/75 hover:opacity-65'
+              }`}
+            >
+              Chân dung
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('wishes')}
+              className={`hidden sm:inline-block whitespace-nowrap shrink-0 transition-opacity ${
+                activeView === 'wishes'
+                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/60'
+                  : 'text-[#f5efe2]/75 hover:opacity-65'
+              }`}
+            >
+              Lời chúc
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenComposer('all')}
+              className="inline-flex h-[40px] sm:h-[calc(46*var(--u))] items-center rounded-full bg-[#f5efe2] px-[18px] sm:px-[calc(26*var(--u))] text-[12px] sm:text-[calc(14*var(--u))] font-medium tracking-[0.12em] text-[#151510] transition-transform duration-200 hover:-translate-y-0.5 whitespace-nowrap shrink-0"
+            >
+              Gửi lời chúc
+            </button>
+          </nav>
+        </header>
+
+        {/* VIEW 1: Full-Screen Cinematic Hero (Fernhollow Layout) */}
+        {activeView === 'hero' && (
+          <main className="pointer-events-none absolute inset-x-5 sm:inset-x-0 top-1/2 -translate-y-[46%] flex flex-col items-center text-center">
+            <h1 className="hero-title">Bản lĩnh, rạng ngời.</h1>
+            <p className="hero-caption">
+              Chúc mừng Ngày Quốc Tế Đàn Ông 19/11.
+              <br />
+              Gửi 5 chàng trai luôn tỏa sáng theo cách riêng.
+            </p>
+            <button
+              type="button"
+              onClick={handleEnterPortraits}
+              onPointerEnter={handleHeroArrowEnter}
+              onPointerLeave={handleHeroArrowLeave}
+              aria-label="Khám phá chân dung 5 thành viên"
+              className="hero-go pointer-events-auto"
+            >
+              <ArrowRight className="h-[22px] w-[22px] sm:h-[calc(22*var(--u))] sm:w-[calc(22*var(--u))] stroke-[1.6]" />
+            </button>
+          </main>
+        )}
+
+        {/* VIEW 2: Editorial Portrait Showcase of the 5 Members */}
+        {activeView === 'portraits' && (
+          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
+            <div className="mx-auto max-w-[1320px]">
+              {/* Section Heading */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between border-b border-[#f5efe2]/15 pb-6">
+                <div>
+                  <p className="text-xs font-medium tracking-[0.18em] uppercase text-[#f5efe2]/60">
+                    Ngày Quốc Tế Đàn Ông · 19 Tháng 11
+                  </p>
+                  <h1 className="mt-2 font-display text-4xl sm:text-5xl lg:text-6xl font-normal uppercase leading-[0.95] tracking-[-0.01em] text-[#f5efe2]">
+                    Năm gương mặt rạng ngời
+                  </h1>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-[#f5efe2]/70">
+                  <span className="tabular-nums">5 chân dung</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums">{totalBlooms} đóa hoa đã thả</span>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('wishes')}
+                    className="text-[#f5efe2] underline underline-offset-4 hover:opacity-75"
+                  >
+                    Xem tường lời chúc
+                  </button>
+                </div>
+              </div>
+
+              {/* 5-Column Editorial Portrait Grid */}
+              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                {MEMBERS.map((member) => {
+                  const blooms = bloomCounts[member.id] ?? member.initialBlooms;
+                  return (
+                    <article
+                      key={member.id}
+                      onMouseEnter={() => valleyRef.current?.setAccentTint(member.accentHex)}
+                      onMouseLeave={() => valleyRef.current?.setAccentTint(null)}
+                      className="group relative flex flex-col overflow-hidden rounded-lg border border-[#f5efe2]/15 bg-[#070a10]/90 transition-transform duration-300 ease-out hover:-translate-y-1.5 hover:border-[#f5efe2]/45"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMemberId(member.id);
+                          valleyRef.current?.setAccentTint(member.accentHex);
+                          audioRef.current?.playBloomChime();
+                        }}
+                        className="flex flex-1 flex-col text-left focus-visible:outline-none"
+                      >
+                        {/* Cropped 3:4 Portrait */}
+                        <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#0a0d14]">
+                          {!brokenImages[member.id] ? (
+                            <img
+                              src={member.portrait}
+                              alt={`Ảnh chân dung ${member.name}`}
+                              referrerPolicy="no-referrer"
+                              onError={() =>
+                                setBrokenImages((prev) => ({ ...prev, [member.id]: true }))
+                              }
+                              className="h-full w-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center">
+                              <Flower2 className="h-8 w-8 text-[#f5efe2]/40" />
+                              <span className="font-display text-2xl uppercase">{member.name}</span>
+                            </div>
+                          )}
+
+                          {/* Measured Contrast Scrim */}
+                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#070a10] via-[#070a10]/20 to-transparent" />
+
+                          {/* Top Index Overlay */}
+                          <div className="absolute top-3.5 left-4 right-4 flex items-center justify-between text-[11px] font-medium tracking-[0.18em] uppercase text-[#f5efe2]/85">
+                            <span className="tabular-nums drop-shadow">{member.index}</span>
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: member.accentHex }}
+                              aria-hidden="true"
+                            />
+                          </div>
+
+                          {/* Member Name Anchored on Lower Portrait */}
+                          <div className="absolute inset-x-4 bottom-3.5">
+                            <h2 className="font-display text-3xl font-normal uppercase leading-none tracking-[-0.01em] text-[#f5efe2]">
+                              {member.name}
+                            </h2>
+                            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#f5efe2]/78">
+                              {member.epithet}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Card Footer Action Row */}
+                        <div className="flex items-center justify-between gap-2 border-t border-[#f5efe2]/10 px-4 py-3 text-xs text-[#f5efe2]/72">
+                          <span className="tabular-nums">{blooms} đóa hoa</span>
+                          <span className="inline-flex items-center gap-1.5 font-medium text-[#f5efe2] transition-transform duration-200 group-hover:translate-x-0.5">
+                            Mở thiệp
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </span>
+                        </div>
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </main>
+        )}
+
+        {/* VIEW 3: Glowing Wishes Wall */}
+        {activeView === 'wishes' && (
+          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
+            <div className="mx-auto max-w-[1160px]">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b border-[#f5efe2]/15 pb-6">
+                <div>
+                  <p className="text-xs font-medium tracking-[0.18em] uppercase text-[#f5efe2]/60">
+                    Tường lời chúc 19/11
+                  </p>
+                  <h1 className="mt-2 font-display text-4xl sm:text-5xl lg:text-6xl font-normal uppercase leading-[0.95] tracking-[-0.01em]">
+                    Những điều muốn gửi trao
+                  </h1>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenComposer(wishFilterId)}
+                  className="inline-flex items-center gap-2 self-start sm:self-auto rounded-full bg-[#f5efe2] px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-[#151510] transition-transform hover:-translate-y-0.5 whitespace-nowrap shrink-0"
+                >
+                  <PenLine className="h-3.5 w-3.5" />
+                  <span>Viết lời chúc mới</span>
+                </button>
+              </div>
+
+              {/* Interactive Filter Controls */}
+              <div
+                className="mt-6 flex flex-wrap items-center gap-2"
+                role="tablist"
+                aria-label="Lọc lời chúc theo thành viên"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={wishFilterId === 'all'}
+                  onClick={() => {
+                    setWishFilterId('all');
+                    valleyRef.current?.setAccentTint(null);
+                  }}
+                  className={`rounded-md px-3.5 py-2 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                    wishFilterId === 'all'
+                      ? 'bg-[#f5efe2] text-[#151510]'
+                      : 'border border-[#f5efe2]/18 bg-[#070a10]/85 text-[#f5efe2]/78 hover:border-[#f5efe2]/45 hover:text-[#f5efe2]'
+                  }`}
+                >
+                  Tất cả ({wishes.length})
+                </button>
+                {MEMBERS.map((member) => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={wishFilterId === member.id}
+                    onClick={() => {
+                      setWishFilterId(member.id);
+                      valleyRef.current?.setAccentTint(member.accentHex);
+                    }}
+                    className={`rounded-md px-3.5 py-2 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                      wishFilterId === member.id
+                        ? 'bg-[#f5efe2] text-[#151510]'
+                        : 'border border-[#f5efe2]/18 bg-[#070a10]/85 text-[#f5efe2]/78 hover:border-[#f5efe2]/45 hover:text-[#f5efe2]'
+                    }`}
+                  >
+                    {member.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Wishes Grid */}
+              <div className="mt-7 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredWishes.map((wish) => {
+                  const target = MEMBERS.find((m) => m.id === wish.recipientId);
+                  return (
+                    <article
+                      key={wish.id}
+                      className="flex flex-col justify-between rounded-lg border border-[#f5efe2]/15 bg-[#080b12]/90 p-6"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 text-xs text-[#f5efe2]/58">
+                          <span style={{ color: target?.accentHex || '#f5d491' }}>
+                            Gửi {wish.recipientName}
+                          </span>
+                          <span aria-hidden="true">·</span>
+                          <span className="tabular-nums">{wish.createdAt}</span>
+                        </div>
+                        <p className="mt-4 text-[15px] leading-relaxed text-[#f5efe2]/90">
+                          “{wish.message}”
+                        </p>
+                      </div>
+
+                      <div className="mt-6 flex items-center justify-between border-t border-[#f5efe2]/10 pt-3.5 text-xs text-[#f5efe2]/60">
+                        <span>Từ {wish.author}</span>
+                        {target && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedMemberId(target.id);
+                              valleyRef.current?.setAccentTint(target.accentHex);
+                            }}
+                            className="text-[#f5efe2]/85 underline underline-offset-4 hover:text-[#f5efe2]"
+                          >
+                            Xem chân dung
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </main>
+        )}
+
+        {/* Bottom-Right Corner HUD (Fernhollow signature footer bar) */}
+        <div className="pointer-events-none fixed inset-x-5 bottom-6 sm:inset-x-auto sm:right-[calc(44*var(--u))] sm:bottom-[calc(40*var(--u))] z-20 flex items-center justify-center sm:justify-end gap-[18px] text-[11px] sm:text-[calc(12.5*var(--u))] font-medium uppercase tracking-[0.16em] text-[#f5efe2]/90">
+          {activeView === 'hero' ? (
+            <span>Cuộn để dạo bước</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveView('hero')}
+              className="pointer-events-auto transition-opacity hover:opacity-70"
+            >
+              Về thung lũng
+            </button>
+          )}
+
+          <span className="h-[22px] sm:h-[calc(26*var(--u))] w-px bg-[#f5efe2]/45" aria-hidden="true" />
+
+          <button
+            type="button"
+            onClick={handleToggleSound}
+            aria-pressed={isSoundOn}
+            aria-label={isSoundOn ? 'Tắt nhạc nền thung lũng' : 'Bật nhạc nền thung lũng'}
+            className="pointer-events-auto grid h-[28px] w-[28px] sm:h-[calc(28*var(--u))] sm:w-[calc(28*var(--u))] place-items-center text-[#f5efe2] transition-opacity hover:opacity-75"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-full w-full fill-none stroke-current stroke-[1.5]"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 9.5v5h3.5L12 18V6L7.5 9.5Z" />
+              <path
+                d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"
+                className={`transition-opacity duration-300 ${isSoundOn ? 'opacity-100' : 'opacity-0'}`}
+              />
+              <path
+                d="m16 10 4 4m0-4-4 4"
+                className={`transition-opacity duration-300 ${isSoundOn ? 'opacity-0' : 'opacity-100'}`}
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* Subtle Bottom-Left Celebration Toast */}
+        {toastMessage && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 sm:bottom-[calc(40*var(--u))] sm:left-[calc(44*var(--u))] sm:translate-x-0 z-30 rounded-full border border-[#f5efe2]/25 bg-[#080a10]/95 px-5 py-2.5 text-xs font-medium tracking-wide text-[#f5efe2] shadow-lg"
+          >
+            {toastMessage}
+          </div>
+        )}
+      </div>
+
+      {/* Member Spotlight Tribute Modal */}
+      {selectedMember && (
+        <MemberSpotlightModal
+          member={selectedMember}
+          bloomCount={bloomCounts[selectedMember.id] ?? selectedMember.initialBlooms}
+          onClose={() => setSelectedMemberId(null)}
+          onPrev={() => handleCycleMember(-1)}
+          onNext={() => handleCycleMember(1)}
+          onSendBloom={handleSendBloom}
+          onWriteWish={(m) => handleOpenComposer(m.id)}
+        />
+      )}
+
+      {/* Wish Composer Modal */}
+      {composerOpen && (
+        <WishComposerModal
+          members={MEMBERS}
+          defaultRecipientId={composerDefaultRecipient}
+          onClose={() => setComposerOpen(false)}
+          onSubmitWish={handleSubmitWish}
+        />
+      )}
+
+      {/* Initial Obsidian Loader Curtain (fades cleanly once WebGL boots) */}
+      {loaderMounted && (
+        <div
+          aria-hidden="true"
+          className={`fixed inset-0 z-50 grid place-items-center bg-[#030407] pointer-events-none transition-opacity duration-1000 ease-out ${
+            isLoaded ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          <span className="text-xs font-medium uppercase tracking-[0.26em] text-[#f5efe2]/75">
+            19.11
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
