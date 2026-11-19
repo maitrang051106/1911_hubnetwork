@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Flower2 } from 'lucide-react';
 import { MEMBERS } from './data/members';
-import { NightValleyEngine } from './scene/NightValleyEngine';
+import { MeadowSceneEngine } from './scene/MeadowSceneEngine';
 import { AmbientAudioEngine } from './audio/AmbientAudioEngine';
 import { MemberSpotlightModal } from './components/MemberSpotlightModal';
 
@@ -9,7 +9,7 @@ type ActiveView = 'hero' | 'portraits';
 
 export default function App() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
-  const valleyRef = useRef<NightValleyEngine | null>(null);
+  const valleyRef = useRef<MeadowSceneEngine | null>(null);
   const audioRef = useRef<AmbientAudioEngine | null>(null);
 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -29,7 +29,7 @@ export default function App() {
     const audio = new AmbientAudioEngine();
     audioRef.current = audio;
 
-    const engine = new NightValleyEngine(container, {
+    const engine = new MeadowSceneEngine(container, {
       onLoaded: () => {
         setIsLoaded(true);
         window.setTimeout(() => setLoaderMounted(false), 1100);
@@ -125,10 +125,10 @@ export default function App() {
         className="fixed inset-0 z-0"
       />
 
-      {/* Subtle top & bottom gradient scrim so typography stays crisp over the golden twilight sky */}
+      {/* Subtle top & bottom gradient scrim so typography stays legible without muting the artwork */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-[5] bg-gradient-to-b from-black/45 via-black/10 to-black/50"
+        className="pointer-events-none fixed inset-0 z-[5] bg-gradient-to-b from-black/28 via-transparent to-black/38"
       />
 
       {/* Semantic Interface Layer (pointer-events-none so canvas stays interactive everywhere) */}
@@ -292,7 +292,7 @@ export default function App() {
         {/* Bottom-Right Corner HUD */}
         <div className="pointer-events-none fixed inset-x-5 bottom-6 sm:inset-x-auto sm:right-[calc(44*var(--u))] sm:bottom-[calc(40*var(--u))] z-20 flex items-center justify-center sm:justify-end gap-[18px] text-[11px] sm:text-[calc(12.5*var(--u))] font-medium uppercase tracking-[0.16em] text-[#f5efe2]/95">
           {activeView === 'hero' ? (
-            <span>Di chuyển &amp; cuộn để xoay cảnh</span>
+            <span>Chạm nhẹ vào làn gió hoa</span>
           ) : (
             <button
               type="button"
