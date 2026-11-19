@@ -7,9 +7,7 @@
   --cream-subtle: rgba(245, 239, 226, 0.42);
   --cream-line: rgba(245, 239, 226, 0.16);
   --ink-dark: #151510;
-  --night-bg: #030407;
-  --panel-bg: rgba(7, 9, 14, 0.88);
-  --panel-elevated: rgba(12, 15, 22, 0.94);
+  --night-bg: #120e18;
 }
 
 @media (max-width: 820px) {
@@ -31,24 +29,25 @@ body,
   padding: 0;
   background-color: var(--night-bg);
   color: var(--cream);
-  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  font-family: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   overflow: hidden;
 }
 
 .font-display {
-  font-family: 'Oswald', 'Arial Narrow', sans-serif;
+  font-family: 'Oswald', 'Be Vietnam Pro', sans-serif;
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* Custom subtle scrollbars for inner panels (Portraits & Wishes overlays) */
+/* Custom subtle scrollbars */
 .valley-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(245, 239, 226, 0.22) transparent;
+  scrollbar-color: rgba(245, 239, 226, 0.24) transparent;
 }
 
 .valley-scroll::-webkit-scrollbar {
@@ -61,7 +60,7 @@ body,
 }
 
 .valley-scroll::-webkit-scrollbar-thumb {
-  background: rgba(245, 239, 226, 0.22);
+  background: rgba(245, 239, 226, 0.24);
   border-radius: 99px;
 }
 
@@ -75,107 +74,89 @@ select:focus-visible {
   outline-offset: 3px;
 }
 
-/* Hero fluid typography matching Fernhollow proportions with crisp sunset legibility */
+/* Fluid Responsive Typography calibrated for Mobile (360px+), Tablet, Laptop & Desktop */
+.hero-eyebrow {
+  font-size: clamp(10px, 1.15vw, 13px);
+  letter-spacing: 0.24em;
+  line-height: 1.4;
+}
+
 .hero-title {
-  font-family: 'Oswald', 'Arial Narrow', sans-serif;
-  font-weight: 400;
-  font-size: calc(146 * var(--u));
-  line-height: 0.94;
-  letter-spacing: -0.015em;
-  white-space: nowrap;
+  font-family: 'Oswald', 'Be Vietnam Pro', sans-serif;
+  font-weight: 500;
+  font-size: clamp(42px, 8.2vw, 120px);
+  line-height: 1.02;
+  letter-spacing: 0.015em;
   color: var(--cream);
-  text-shadow: 0 6px 34px rgba(18, 12, 22, 0.72), 0 2px 10px rgba(18, 12, 22, 0.55);
+  text-wrap: balance;
+  text-shadow: 0 8px 36px rgba(14, 10, 20, 0.78), 0 2px 12px rgba(14, 10, 20, 0.62);
 }
 
-.hero-caption {
-  margin-top: calc(40 * var(--u));
-  font-size: calc(20 * var(--u));
-  line-height: 1.45;
-  color: rgba(250, 245, 236, 0.96);
-  text-shadow: 0 3px 20px rgba(16, 11, 20, 0.82), 0 1px 6px rgba(16, 11, 20, 0.7);
+.hero-brand-sub {
+  font-family: 'Oswald', 'Be Vietnam Pro', sans-serif;
+  font-size: clamp(17px, 2.2vw, 30px);
+  letter-spacing: 0.28em;
+  line-height: 1.15;
 }
 
-.hero-go {
-  display: grid;
-  place-items: center;
-  margin-top: calc(34 * var(--u));
-  width: calc(60 * var(--u));
-  height: calc(60 * var(--u));
-  min-width: 48px;
-  min-height: 48px;
-  border: 1.5px solid var(--cream);
-  border-radius: 50%;
-  color: var(--cream);
-  background: rgba(16, 12, 20, 0.42);
-  transition: background-color 0.28s cubic-bezier(0.16, 1, 0.3, 1),
-    color 0.28s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+.hero-tribute-block {
+  font-size: clamp(13.5px, 1.3vw, 17px);
+  line-height: 1.72;
+  text-wrap: pretty;
+  text-shadow: 0 3px 22px rgba(12, 9, 18, 0.88), 0 1px 6px rgba(12, 9, 18, 0.76);
 }
 
-.hero-go:hover {
-  background-color: var(--cream);
-  color: var(--ink-dark);
-  transform: scale(1.06);
+.section-heading {
+  font-family: 'Oswald', 'Be Vietnam Pro', sans-serif;
+  font-weight: 500;
+  font-size: clamp(28px, 4.2vw, 54px);
+  line-height: 1.14;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
 }
 
-@keyframes bloomCountPop {
-  0% {
-    transform: scale(1);
-    opacity: 0.65;
-  }
-  42% {
-    transform: scale(1.28);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.animate-bloom-pop {
-  display: inline-block;
-  animation: bloomCountPop 0.42s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes marqueeLeftToRight {
-  0% {
-    transform: translate3d(-50%, 0, 0);
-  }
-  100% {
-    transform: translate3d(0%, 0, 0);
-  }
-}
-
-.marquee-ltr-track {
-  display: flex;
-  width: max-content;
-  animation: marqueeLeftToRight 38s linear infinite;
-  will-change: transform;
-}
-
-.marquee-ltr-track:hover {
-  animation-play-state: paused;
-}
-
-@media (max-width: 820px) {
+/* Short-height screens (landscape mobile / 720p laptops) scale hero gently to prevent cramping */
+@media (max-height: 700px) and (min-width: 640px) {
   .hero-title {
-    font-size: clamp(54px, 14.5vw, 84px);
-    white-space: normal;
-    text-wrap: balance;
-    line-height: 0.98;
+    font-size: clamp(44px, 7.2vw, 84px);
   }
+  .hero-tribute-block {
+    font-size: clamp(13px, 1.2vw, 15px);
+    line-height: 1.58;
+  }
+}
 
-  .hero-caption {
-    margin-top: 24px;
-    font-size: 16px;
+/* Gentle animated scroll-down chevron cue */
+@keyframes scrollCueFloat {
+  0%,
+  100% {
+    transform: translateY(0);
   }
+  50% {
+    transform: translateY(6px);
+  }
+}
 
-  .hero-go {
-    margin-top: 26px;
-    width: 54px;
-    height: 54px;
-  }
+.scroll-cue-chevron {
+  animation: scrollCueFloat 2.1s ease-in-out infinite;
+}
+
+/* Center-Magnified Warrior Card & Large Forged Sword Illumination */
+.warrior-card-slot[data-center="true"] .warrior-card {
+  border-color: color-mix(in srgb, var(--warrior-accent) 76%, rgba(245, 239, 226, 0.42));
+  box-shadow:
+    0 28px 68px rgba(3, 2, 8, 0.88),
+    0 0 36px color-mix(in srgb, var(--warrior-accent) 28%, transparent);
+}
+
+.warrior-card-slot[data-center="true"] .warrior-sword-glow {
+  transform: translateY(-4px) scale(1.04);
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--warrior-accent) 68%, transparent))
+    drop-shadow(0 8px 16px rgba(0, 0, 0, 0.92));
+}
+
+.warrior-sword-glow {
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.88));
 }
 
 @media (prefers-reduced-motion: reduce) {
