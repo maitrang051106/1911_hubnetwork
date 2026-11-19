@@ -1,36 +1,26 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Download, Flower2, PenLine, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Flower2, X } from 'lucide-react';
 import type { Member } from '../data/members';
-import { downloadMemberCard } from '../utils/cardExporter';
 
 interface MemberSpotlightModalProps {
   member: Member;
-  bloomCount: number;
+  total: number;
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
-  onSendBloom: (member: Member) => void;
-  onWriteWish: (member: Member) => void;
 }
 
 export function MemberSpotlightModal({
   member,
-  bloomCount,
+  total,
   onClose,
   onPrev,
   onNext,
-  onSendBloom,
-  onWriteWish,
 }: MemberSpotlightModalProps) {
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [justBloomed, setJustBloomed] = useState(false);
-  const [bloomAnimKey, setBloomAnimKey] = useState(0);
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     setImgError(false);
-    setJustBloomed(false);
-    setBloomAnimKey(0);
   }, [member.id]);
 
   useEffect(() => {
@@ -42,23 +32,6 @@ export function MemberSpotlightModal({
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose, onPrev, onNext]);
-
-  const handleBloomClick = () => {
-    onSendBloom(member);
-    setBloomAnimKey((k) => k + 1);
-    setJustBloomed(true);
-    window.setTimeout(() => setJustBloomed(false), 1100);
-  };
-
-  const handleDownload = async () => {
-    if (isDownloading) return;
-    setIsDownloading(true);
-    try {
-      await downloadMemberCard(member);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
 
   return (
     <div
@@ -75,7 +48,9 @@ export function MemberSpotlightModal({
         {/* Top bar inside modal */}
         <div className="flex items-center justify-between gap-4 border-b border-[#f5efe2]/12 px-5 py-4 sm:px-8">
           <div className="flex items-center gap-3 text-xs tracking-[0.16em] uppercase text-[#f5efe2]/65">
-            <span className="tabular-nums">HUB Network · {member.index} / 05</span>
+            <span className="tabular-nums">
+              HUB Network · {member.index} / {String(total).padStart(2, '0')}
+            </span>
             <span aria-hidden="true">·</span>
             <span>19 Tháng 11</span>
           </div>
@@ -129,8 +104,8 @@ export function MemberSpotlightModal({
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#080a10] via-[#080a10]/45 to-transparent lg:hidden" />
           </div>
 
-          {/* Tribute Content */}
-          <div className="lg:col-span-7 flex flex-col justify-between p-6 sm:p-8 lg:p-10 gap-8">
+          {/* Tribute Card Content */}
+          <div className="lg:col-span-7 flex flex-col justify-center p-6 sm:p-8 lg:p-10">
             <div className="space-y-5">
               <div>
                 <p
@@ -165,45 +140,6 @@ export function MemberSpotlightModal({
                   “{member.signatureWish}”
                 </p>
               </div>
-            </div>
-
-            {/* Interactive Actions */}
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleBloomClick}
-                className="inline-flex items-center gap-2.5 rounded-full bg-[#f5efe2] px-5 py-2.5 text-sm font-medium text-[#151510] transition-transform hover:-translate-y-0.5 active:translate-y-0 whitespace-nowrap shrink-0"
-              >
-                <Flower2 className="h-4 w-4" />
-                <span>{justBloomed ? 'Đã thả hoa chúc mừng!' : 'Thả hoa chúc mừng'}</span>
-                <span
-                  key={bloomAnimKey}
-                  className={`tabular-nums text-xs opacity-80 ${
-                    bloomAnimKey > 0 ? 'animate-bloom-pop' : ''
-                  }`}
-                >
-                  ({bloomCount})
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDownload}
-                disabled={isDownloading}
-                className="inline-flex items-center gap-2 rounded-full border border-[#f5efe2]/28 px-5 py-2.5 text-sm font-medium text-[#f5efe2] transition-colors hover:border-[#f5efe2] hover:bg-[#f5efe2]/10 disabled:opacity-50 whitespace-nowrap shrink-0"
-              >
-                <Download className="h-4 w-4" />
-                <span>{isDownloading ? 'Đang tạo thiệp...' : 'Tải thiệp 19/11'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onWriteWish(member)}
-                className="inline-flex items-center gap-2 rounded-full border border-[#f5efe2]/18 px-4 py-2.5 text-sm font-medium text-[#f5efe2]/80 transition-colors hover:border-[#f5efe2]/50 hover:text-[#f5efe2] whitespace-nowrap shrink-0"
-              >
-                <PenLine className="h-4 w-4" />
-                <span>Viết lời chúc riêng</span>
-              </button>
             </div>
           </div>
         </div>

@@ -1,45 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Flower2, PenLine } from 'lucide-react';
-import { INITIAL_WISHES, MEMBERS, type Member, type WishItem } from './data/members';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Flower2 } from 'lucide-react';
+import { MEMBERS } from './data/members';
 import { NightValleyEngine } from './scene/NightValleyEngine';
 import { AmbientAudioEngine } from './audio/AmbientAudioEngine';
 import { MemberSpotlightModal } from './components/MemberSpotlightModal';
-import { WishComposerModal } from './components/WishComposerModal';
 
-type ActiveView = 'hero' | 'portraits' | 'wishes';
-
-const STORAGE_WISHES_KEY = 'thung-lung-19-11-wishes-v1';
-const STORAGE_BLOOMS_KEY = 'thung-lung-19-11-blooms-v1';
-
-function loadSavedWishes(): WishItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_WISHES_KEY);
-    if (!raw) return INITIAL_WISHES;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {
-    // Fallback to initial wishes
-  }
-  return INITIAL_WISHES;
-}
-
-function loadSavedBlooms(): Record<string, number> {
-  const defaults: Record<string, number> = {};
-  MEMBERS.forEach((m) => {
-    defaults[m.id] = m.initialBlooms;
-  });
-  try {
-    const raw = localStorage.getItem(STORAGE_BLOOMS_KEY);
-    if (!raw) return defaults;
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
-      return { ...defaults, ...parsed };
-    }
-  } catch {
-    // Fallback to defaults
-  }
-  return defaults;
-}
+type ActiveView = 'hero' | 'portraits';
 
 export default function App() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -53,26 +19,7 @@ export default function App() {
 
   const [activeView, setActiveView] = useState<ActiveView>('hero');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [wishFilterId, setWishFilterId] = useState<string>('all');
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [composerDefaultRecipient, setComposerDefaultRecipient] = useState<string>('all');
-
-  const [wishes, setWishes] = useState<WishItem[]>(loadSavedWishes);
-  const [bloomCounts, setBloomCounts] = useState<Record<string, number>>(loadSavedBlooms);
-  const [lastBloomedId, setLastBloomedId] = useState<string | null>(null);
-  const [bloomPulseSeq, setBloomPulseSeq] = useState(0);
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const triggerToast = useCallback((msg: string) => {
-    setToastMessage(msg);
-  }, []);
-
-  useEffect(() => {
-    if (!toastMessage) return;
-    const timer = window.setTimeout(() => setToastMessage(null), 3000);
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
 
   // Mount isolated 3D Sunset Wildflower Meadow & Resting Warrior engine + procedural Web Audio
   useEffect(() => {
@@ -107,16 +54,16 @@ export default function App() {
     };
   }, []);
 
-  // Synchronize 3D valley scroll lock & dispersion state with active UI view/modals
+  // Synchronize 3D valley scroll lock & dispersion state with active UI view/modal
   useEffect(() => {
     const engine = valleyRef.current;
     const audio = audioRef.current;
     if (!engine) return;
 
-    const overlayActive = activeView !== 'hero' || selectedMemberId !== null || composerOpen;
+    const overlayActive = activeView !== 'hero' || selectedMemberId !== null;
     engine.setScrollLocked(overlayActive);
 
-    if (selectedMemberId || composerOpen) {
+    if (selectedMemberId) {
       engine.startHoverTransition();
       audio?.setMuffled(true);
     } else if (activeView !== 'hero') {
@@ -127,7 +74,7 @@ export default function App() {
       engine.setAccentTint(null);
       audio?.setMuffled(false);
     }
-  }, [activeView, selectedMemberId, composerOpen]);
+  }, [activeView, selectedMemberId]);
 
   const handleToggleSound = () => {
     const audio = audioRef.current;
@@ -142,7 +89,7 @@ export default function App() {
   };
 
   const handleHeroArrowLeave = () => {
-    if (activeView === 'hero' && !selectedMemberId && !composerOpen) {
+    if (activeView === 'hero' && !selectedMemberId) {
       valleyRef.current?.stopHoverTransition();
       audioRef.current?.setMuffled(false);
     }
@@ -152,56 +99,6 @@ export default function App() {
     valleyRef.current?.triggerCelebrationBurst('#f6bfd0');
     audioRef.current?.playBloomChime();
     setActiveView('portraits');
-  };
-
-  const handleSendBloom = useCallback(
-    (member: Member) => {
-      setBloomCounts((prev) => {
-        const next = { ...prev, [member.id]: (prev[member.id] ?? member.initialBlooms) + 1 };
-        try {
-          localStorage.setItem(STORAGE_BLOOMS_KEY, JSON.stringify(next));
-        } catch {
-          // Ignore storage quota errors
-        }
-        return next;
-      });
-      setLastBloomedId(member.id);
-      setBloomPulseSeq((s) => s + 1);
-      valleyRef.current?.triggerCelebrationBurst(member.accentHex);
-      audioRef.current?.playBloomChime();
-      triggerToast(`Đã gửi một đóa hoa chúc mừng đến ${member.name}`);
-    },
-    [triggerToast]
-  );
-
-  const handleOpenComposer = (recipientId = 'all') => {
-    setSelectedMemberId(null);
-    setComposerDefaultRecipient(recipientId);
-    setComposerOpen(true);
-  };
-
-  const handleSubmitWish = (draft: Omit<WishItem, 'id' | 'createdAt'>) => {
-    const newWish: WishItem = {
-      ...draft,
-      id: `wish-${Date.now()}`,
-      createdAt: '19/11/2026',
-    };
-    setWishes((prev) => {
-      const next = [newWish, ...prev];
-      try {
-        localStorage.setItem(STORAGE_WISHES_KEY, JSON.stringify(next));
-      } catch {
-        // Ignore storage errors
-      }
-      return next;
-    });
-
-    const recipientMember = MEMBERS.find((m) => m.id === draft.recipientId);
-    valleyRef.current?.triggerCelebrationBurst(recipientMember?.accentHex || '#f6bfd0');
-    audioRef.current?.playBloomChime();
-    setActiveView('wishes');
-    setWishFilterId(draft.recipientId === 'all' ? 'all' : draft.recipientId);
-    triggerToast(`Đã gửi lời chúc tới ${draft.recipientName}`);
   };
 
   const selectedMember = useMemo(
@@ -217,16 +114,6 @@ export default function App() {
     setSelectedMemberId(nextMember.id);
     valleyRef.current?.setAccentTint(nextMember.accentHex);
   };
-
-  const filteredWishes = useMemo(() => {
-    if (wishFilterId === 'all') return wishes;
-    return wishes.filter((w) => w.recipientId === wishFilterId || w.recipientId === 'all');
-  }, [wishes, wishFilterId]);
-
-  const totalBlooms = useMemo(
-    () => Object.values(bloomCounts).reduce((sum, val) => sum + val, 0),
-    [bloomCounts]
-  );
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#18141d] text-[#f5efe2]">
@@ -250,9 +137,8 @@ export default function App() {
           uiVisible ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        {/* Top Bar — Fernhollow 3-Zone Contract */}
+        {/* Top Bar */}
         <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-6 px-[18px] pt-[18px] sm:px-[calc(44*var(--u))] sm:pt-[calc(24*var(--u))]">
-          {/* Zone 1: Single-line Wordmark */}
           <button
             type="button"
             onClick={() => setActiveView('hero')}
@@ -261,7 +147,6 @@ export default function App() {
             HUB Network · 19.11
           </button>
 
-          {/* Zone 2 + Zone 3: Navigation Links & Cream Pill CTA */}
           <nav
             aria-label="Điều hướng chính"
             className="pointer-events-auto flex items-center gap-5 sm:gap-[calc(42*var(--u))] text-[12px] sm:text-[calc(14*var(--u))] font-medium uppercase tracking-[0.16em]"
@@ -269,7 +154,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveView('hero')}
-              className={`hidden md:inline-block whitespace-nowrap shrink-0 transition-opacity ${
+              className={`whitespace-nowrap shrink-0 transition-opacity ${
                 activeView === 'hero'
                   ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/70'
                   : 'text-[#f5efe2]/80 hover:opacity-65'
@@ -288,25 +173,6 @@ export default function App() {
             >
               HUB Men
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveView('wishes')}
-              className={`hidden sm:inline-block whitespace-nowrap shrink-0 transition-opacity ${
-                activeView === 'wishes'
-                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/70'
-                  : 'text-[#f5efe2]/80 hover:opacity-65'
-              }`}
-            >
-              Lời chúc
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleOpenComposer('all')}
-              className="inline-flex h-[40px] sm:h-[calc(46*var(--u))] items-center rounded-full bg-[#f5efe2] px-[18px] sm:px-[calc(26*var(--u))] text-[12px] sm:text-[calc(14*var(--u))] font-medium tracking-[0.12em] text-[#151510] transition-transform duration-200 hover:-translate-y-0.5 whitespace-nowrap shrink-0"
-            >
-              Gửi lời chúc
-            </button>
           </nav>
         </header>
 
@@ -324,7 +190,7 @@ export default function App() {
               onClick={handleEnterPortraits}
               onPointerEnter={handleHeroArrowEnter}
               onPointerLeave={handleHeroArrowLeave}
-              aria-label="Khám phá những người đàn ông của HUB Network"
+              aria-label="Xem thiệp chúc mừng những người đàn ông của HUB Network"
               className="hero-go pointer-events-auto"
             >
               <ArrowRight className="h-[22px] w-[22px] sm:h-[calc(22*var(--u))] sm:w-[calc(22*var(--u))] stroke-[1.6]" />
@@ -332,7 +198,7 @@ export default function App() {
           </main>
         )}
 
-        {/* VIEW 2: Editorial Portrait Showcase — Những người đàn ông của HUB Network */}
+        {/* VIEW 2: Greeting Cards — Những người đàn ông của HUB Network */}
         {activeView === 'portraits' && (
           <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll bg-[#08070d]/58 pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
             <div className="mx-auto max-w-[1320px]">
@@ -346,230 +212,84 @@ export default function App() {
                     Những người đàn ông của HUB Network
                   </h1>
                 </div>
-                <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-[#f5efe2]/80">
-                  <span className="tabular-nums">5 thành viên</span>
-                  <span aria-hidden="true">·</span>
-                  <span className="tabular-nums">
-                    <span
-                      key={`total-${bloomPulseSeq}`}
-                      className={bloomPulseSeq > 0 ? 'animate-bloom-pop' : ''}
-                    >
-                      {totalBlooms}
-                    </span>{' '}
-                    đóa hoa đã thả
-                  </span>
-                  <span aria-hidden="true">·</span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveView('wishes')}
-                    className="text-[#f5efe2] underline underline-offset-4 hover:opacity-75"
-                  >
-                    Xem tường lời chúc
-                  </button>
+                <div className="text-xs sm:text-sm text-[#f5efe2]/80">
+                  <span className="tabular-nums">{MEMBERS.length} thành viên</span>
                 </div>
               </div>
 
-              {/* 5-Column Editorial Portrait Grid */}
-              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-                {MEMBERS.map((member) => {
-                  const blooms = bloomCounts[member.id] ?? member.initialBlooms;
-                  const shouldPulse = bloomPulseSeq > 0 && lastBloomedId === member.id;
-                  return (
-                    <article
-                      key={member.id}
-                      onMouseEnter={() => valleyRef.current?.setAccentTint(member.accentHex)}
-                      onMouseLeave={() => valleyRef.current?.setAccentTint(null)}
-                      className="group relative flex flex-col overflow-hidden rounded-lg border border-[#f5efe2]/18 bg-[#0b0a12]/90 transition-transform duration-300 ease-out hover:-translate-y-1.5 hover:border-[#f5efe2]/50"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedMemberId(member.id);
-                          valleyRef.current?.setAccentTint(member.accentHex);
-                          audioRef.current?.playBloomChime();
-                        }}
-                        className="flex flex-1 flex-col text-left focus-visible:outline-none"
-                      >
-                        {/* Cropped 3:4 Portrait */}
-                        <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#0a0d14]">
-                          {!brokenImages[member.id] ? (
-                            <img
-                              src={member.portrait}
-                              alt={`Ảnh chân dung ${member.name}`}
-                              referrerPolicy="no-referrer"
-                              onError={() =>
-                                setBrokenImages((prev) => ({ ...prev, [member.id]: true }))
-                              }
-                              className="h-full w-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center">
-                              <Flower2 className="h-8 w-8 text-[#f5efe2]/40" />
-                              <span className="font-display text-2xl uppercase">{member.name}</span>
-                            </div>
-                          )}
-
-                          {/* Measured Contrast Scrim */}
-                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0a12] via-[#0b0a12]/25 to-transparent" />
-
-                          {/* Top Index Overlay */}
-                          <div className="absolute top-3.5 left-4 right-4 flex items-center justify-between text-[11px] font-medium tracking-[0.18em] uppercase text-[#f5efe2]/88">
-                            <span className="tabular-nums drop-shadow">{member.index}</span>
-                            <span
-                              className="h-2 w-2 rounded-full"
-                              style={{ backgroundColor: member.accentHex }}
-                              aria-hidden="true"
-                            />
-                          </div>
-
-                          {/* Member Name Anchored on Lower Portrait */}
-                          <div className="absolute inset-x-4 bottom-3.5">
-                            <h2 className="font-display text-3xl font-normal uppercase leading-none tracking-[-0.01em] text-[#f5efe2]">
-                              {member.name}
-                            </h2>
-                            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#f5efe2]/82">
-                              {member.epithet}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Card Footer Action Row */}
-                        <div className="flex items-center justify-between gap-2 border-t border-[#f5efe2]/12 px-4 py-3 text-xs text-[#f5efe2]/78">
-                          <span className="tabular-nums">
-                            <span
-                              key={`${member.id}-${shouldPulse ? bloomPulseSeq : 0}`}
-                              className={shouldPulse ? 'animate-bloom-pop' : ''}
-                            >
-                              {blooms}
-                            </span>{' '}
-                            đóa hoa
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 font-medium text-[#f5efe2] transition-transform duration-200 group-hover:translate-x-0.5">
-                            Xem lời chúc
-                            <ArrowRight className="h-3.5 w-3.5" />
-                          </span>
-                        </div>
-                      </button>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          </main>
-        )}
-
-        {/* VIEW 3: Glowing Wishes Wall */}
-        {activeView === 'wishes' && (
-          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll bg-[#08070d]/58 pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
-            <div className="mx-auto max-w-[1160px]">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b border-[#f5efe2]/20 pb-6">
-                <div>
-                  <p className="text-xs font-medium tracking-[0.18em] uppercase text-[#f5efe2]/70">
-                    HUB Network · Tường lời chúc 19/11
-                  </p>
-                  <h1 className="mt-2 font-display text-4xl sm:text-5xl lg:text-6xl font-normal uppercase leading-[0.95] tracking-[-0.01em]">
-                    Những điều muốn gửi trao
-                  </h1>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleOpenComposer(wishFilterId)}
-                  className="inline-flex items-center gap-2 self-start sm:self-auto rounded-full bg-[#f5efe2] px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-[#151510] transition-transform hover:-translate-y-0.5 whitespace-nowrap shrink-0"
-                >
-                  <PenLine className="h-3.5 w-3.5" />
-                  <span>Viết lời chúc mới</span>
-                </button>
-              </div>
-
-              {/* Interactive Filter Controls */}
-              <div
-                className="mt-6 flex flex-wrap items-center gap-2"
-                role="tablist"
-                aria-label="Lọc lời chúc theo thành viên"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={wishFilterId === 'all'}
-                  onClick={() => {
-                    setWishFilterId('all');
-                    valleyRef.current?.setAccentTint(null);
-                  }}
-                  className={`rounded-md px-3.5 py-2 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                    wishFilterId === 'all'
-                      ? 'bg-[#f5efe2] text-[#151510]'
-                      : 'border border-[#f5efe2]/20 bg-[#0b0a12]/88 text-[#f5efe2]/82 hover:border-[#f5efe2]/50 hover:text-[#f5efe2]'
-                  }`}
-                >
-                  Tất cả ({wishes.length})
-                </button>
+              {/* Greeting Card Grid */}
+              <div className="mt-8 flex flex-wrap justify-center gap-5">
                 {MEMBERS.map((member) => (
-                  <button
+                  <article
                     key={member.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={wishFilterId === member.id}
-                    onClick={() => {
-                      setWishFilterId(member.id);
-                      valleyRef.current?.setAccentTint(member.accentHex);
-                    }}
-                    className={`rounded-md px-3.5 py-2 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                      wishFilterId === member.id
-                        ? 'bg-[#f5efe2] text-[#151510]'
-                        : 'border border-[#f5efe2]/20 bg-[#0b0a12]/88 text-[#f5efe2]/82 hover:border-[#f5efe2]/50 hover:text-[#f5efe2]'
-                    }`}
+                    onMouseEnter={() => valleyRef.current?.setAccentTint(member.accentHex)}
+                    onMouseLeave={() => valleyRef.current?.setAccentTint(null)}
+                    className="group relative flex w-full sm:w-[calc(50%-10px)] lg:w-[calc(25%-15px)] flex-col overflow-hidden rounded-lg border border-[#f5efe2]/18 bg-[#0b0a12]/90 transition-transform duration-300 ease-out hover:-translate-y-1.5 hover:border-[#f5efe2]/50"
                   >
-                    {member.name}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMemberId(member.id);
+                        valleyRef.current?.setAccentTint(member.accentHex);
+                        audioRef.current?.playBloomChime();
+                      }}
+                      className="flex flex-1 flex-col text-left focus-visible:outline-none"
+                    >
+                      {/* Cropped 3:4 Portrait */}
+                      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#0a0d14]">
+                        {!brokenImages[member.id] ? (
+                          <img
+                            src={member.portrait}
+                            alt={`Ảnh chân dung ${member.name}`}
+                            referrerPolicy="no-referrer"
+                            onError={() =>
+                              setBrokenImages((prev) => ({ ...prev, [member.id]: true }))
+                            }
+                            className="h-full w-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center">
+                            <Flower2 className="h-8 w-8 text-[#f5efe2]/40" />
+                            <span className="font-display text-2xl uppercase">{member.name}</span>
+                          </div>
+                        )}
+
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0a12] via-[#0b0a12]/25 to-transparent" />
+
+                        <div className="absolute top-3.5 left-4 right-4 flex items-center justify-between text-[11px] font-medium tracking-[0.18em] uppercase text-[#f5efe2]/88">
+                          <span className="tabular-nums drop-shadow">{member.index}</span>
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: member.accentHex }}
+                            aria-hidden="true"
+                          />
+                        </div>
+
+                        <div className="absolute inset-x-4 bottom-3.5">
+                          <h2 className="font-display text-3xl font-normal uppercase leading-none tracking-[-0.01em] text-[#f5efe2]">
+                            {member.name}
+                          </h2>
+                          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#f5efe2]/82">
+                            {member.epithet}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 border-t border-[#f5efe2]/12 px-4 py-3 text-xs text-[#f5efe2]/78">
+                        <span className="inline-flex items-center gap-1.5 font-medium text-[#f5efe2] transition-transform duration-200 group-hover:translate-x-0.5">
+                          Mở thiệp
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                      </div>
+                    </button>
+                  </article>
                 ))}
               </div>
-
-              {/* Wishes Grid */}
-              <div className="mt-7 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredWishes.map((wish) => {
-                  const target = MEMBERS.find((m) => m.id === wish.recipientId);
-                  return (
-                    <article
-                      key={wish.id}
-                      className="flex flex-col justify-between rounded-lg border border-[#f5efe2]/18 bg-[#0b0a12]/92 p-6"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 text-xs text-[#f5efe2]/62">
-                          <span style={{ color: target?.accentHex || '#f6c270' }}>
-                            Gửi {wish.recipientName}
-                          </span>
-                          <span aria-hidden="true">·</span>
-                          <span className="tabular-nums">{wish.createdAt}</span>
-                        </div>
-                        <p className="mt-4 text-[15px] leading-relaxed text-[#f5efe2]/92">
-                          “{wish.message}”
-                        </p>
-                      </div>
-
-                      <div className="mt-6 flex items-center justify-between border-t border-[#f5efe2]/12 pt-3.5 text-xs text-[#f5efe2]/65">
-                        <span>Từ {wish.author}</span>
-                        {target && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedMemberId(target.id);
-                              valleyRef.current?.setAccentTint(target.accentHex);
-                            }}
-                            className="text-[#f5efe2]/88 underline underline-offset-4 hover:text-[#f5efe2]"
-                          >
-                            Xem chân dung
-                          </button>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
             </div>
           </main>
         )}
 
-        {/* Bottom-Right Corner HUD (Fernhollow signature footer bar) */}
+        {/* Bottom-Right Corner HUD */}
         <div className="pointer-events-none fixed inset-x-5 bottom-6 sm:inset-x-auto sm:right-[calc(44*var(--u))] sm:bottom-[calc(40*var(--u))] z-20 flex items-center justify-center sm:justify-end gap-[18px] text-[11px] sm:text-[calc(12.5*var(--u))] font-medium uppercase tracking-[0.16em] text-[#f5efe2]/95">
           {activeView === 'hero' ? (
             <span>Di chuyển &amp; cuộn để xoay cảnh</span>
@@ -610,39 +330,16 @@ export default function App() {
             </svg>
           </button>
         </div>
-
-        {/* Subtle Bottom-Left Celebration Toast */}
-        {toastMessage && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 sm:bottom-[calc(40*var(--u))] sm:left-[calc(44*var(--u))] sm:translate-x-0 z-30 rounded-full border border-[#f5efe2]/25 bg-[#0b0a12]/95 px-5 py-2.5 text-xs font-medium tracking-wide text-[#f5efe2] shadow-lg"
-          >
-            {toastMessage}
-          </div>
-        )}
       </div>
 
-      {/* Member Spotlight Tribute Modal */}
+      {/* Member Greeting Card Modal */}
       {selectedMember && (
         <MemberSpotlightModal
           member={selectedMember}
-          bloomCount={bloomCounts[selectedMember.id] ?? selectedMember.initialBlooms}
+          total={MEMBERS.length}
           onClose={() => setSelectedMemberId(null)}
           onPrev={() => handleCycleMember(-1)}
           onNext={() => handleCycleMember(1)}
-          onSendBloom={handleSendBloom}
-          onWriteWish={(m) => handleOpenComposer(m.id)}
-        />
-      )}
-
-      {/* Wish Composer Modal */}
-      {composerOpen && (
-        <WishComposerModal
-          members={MEMBERS}
-          defaultRecipientId={composerDefaultRecipient}
-          onClose={() => setComposerOpen(false)}
-          onSubmitWish={handleSubmitWish}
         />
       )}
 
