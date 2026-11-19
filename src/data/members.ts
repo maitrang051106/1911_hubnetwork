@@ -109,10 +109,10 @@ export const INITIAL_WISHES: WishItem[] = [
   {
     id: 'wish-1',
     recipientId: 'all',
-    recipientName: 'Cả 5 chàng trai',
-    author: 'Hội chị em 19/11',
+    recipientName: 'Những chàng trai HUB Network',
+    author: 'Hội chị em HUB Network',
     message:
-      'Chúc mừng Ngày Quốc Tế Đàn Ông! Cảm ơn cả 5 chàng trai vì đã luôn đồng hành, sẻ chia và mang đến thật nhiều năng lượng tuyệt vời trong suốt thời gian qua. Mong các bạn luôn mạnh mẽ, hạnh phúc và rực rỡ như thung lũng hoa đêm nay.',
+      'Chúc mừng Ngày Quốc Tế Đàn Ông 19/11! Cảm ơn những chàng trai bản lĩnh của HUB Network vì đã luôn đồng hành, gánh vác và mang đến nguồn năng lượng tuyệt vời. Sau những chặng đường nỗ lực hết mình, chúc các bạn luôn có những phút giây bình yên, hạnh phúc và rực rỡ nhất.',
     createdAt: '19/11/2026',
   },
   {

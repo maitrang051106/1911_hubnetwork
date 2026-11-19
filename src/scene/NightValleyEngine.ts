@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { createRestingWarriorTableau, type WarriorSceneRig } from './WarriorSculpture';
 
 export interface NightValleyCallbacks {
   onLoaded?: () => void;
@@ -12,7 +14,8 @@ export interface NightValleyCallbacks {
 const _camPos = new THREE.Vector3();
 const _lookTarget = new THREE.Vector3();
 const _targetColor = new THREE.Color();
-const _defaultAccent = new THREE.Color('#f5efe2');
+const _defaultAccent = new THREE.Color('#f6bfd0');
+const _dummy = new THREE.Object3D();
 
 /**
  * Detect software WebGL renderers (SwiftShader, llvmpipe, etc.) from GPU string
@@ -33,9 +36,6 @@ function detectSoftwareWebGL(): boolean {
   }
 }
 
-/**
- * Deterministic pseudo-random helper for organic scattering.
- */
 function seededRandom(seed: number): () => number {
   let s = seed % 2147483647;
   if (s <= 0) s += 2147483646;
@@ -46,9 +46,9 @@ function seededRandom(seed: number): () => number {
 }
 
 /**
- * Procedurally paints a crisp luminous 5-petal night flower sprite texture.
+ * High-resolution 6-petal daisy/cosmos wildflower sprite matching the pink/cream/gold meadow paintings.
  */
-function createFlowerTexture(): THREE.CanvasTexture {
+function createWildflowerTexture(): THREE.CanvasTexture {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -59,54 +59,44 @@ function createFlowerTexture(): THREE.CanvasTexture {
 
   ctx.clearRect(0, 0, size, size);
 
-  // Soft outer bioluminescent aura
-  const aura = ctx.createRadialGradient(cx, cy, 8, cx, cy, 122);
-  aura.addColorStop(0, 'rgba(255, 248, 232, 0.52)');
-  aura.addColorStop(0.45, 'rgba(255, 242, 215, 0.16)');
-  aura.addColorStop(1, 'rgba(255, 240, 210, 0)');
-  ctx.fillStyle = aura;
+  // Soft sunlit petal glow halo
+  const halo = ctx.createRadialGradient(cx, cy, 8, cx, cy, 118);
+  halo.addColorStop(0, 'rgba(255, 245, 240, 0.35)');
+  halo.addColorStop(0.55, 'rgba(255, 224, 228, 0.10)');
+  halo.addColorStop(1, 'rgba(255, 220, 225, 0)');
+  ctx.fillStyle = halo;
   ctx.fillRect(0, 0, size, size);
 
-  // 5 layered luminous petals
-  const petals = 5;
+  const petals = 7;
   for (let i = 0; i < petals; i++) {
-    const angle = (i / petals) * Math.PI * 2 - Math.PI / 2;
+    const angle = (i / petals) * Math.PI * 2;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(angle);
 
-    const petalGrad = ctx.createLinearGradient(0, -10, 0, -96);
-    petalGrad.addColorStop(0, 'rgba(255, 252, 244, 0.96)');
-    petalGrad.addColorStop(0.55, 'rgba(255, 244, 224, 0.82)');
-    petalGrad.addColorStop(1, 'rgba(235, 225, 210, 0.18)');
+    const petalGrad = ctx.createLinearGradient(0, -8, 0, -96);
+    petalGrad.addColorStop(0, 'rgba(255, 250, 246, 0.98)');
+    petalGrad.addColorStop(0.65, 'rgba(255, 244, 242, 0.92)');
+    petalGrad.addColorStop(1, 'rgba(248, 228, 232, 0.35)');
 
     ctx.beginPath();
     ctx.moveTo(0, -6);
-    ctx.bezierCurveTo(-30, -28, -34, -84, 0, -102);
-    ctx.bezierCurveTo(34, -84, 30, -28, 0, -6);
+    ctx.bezierCurveTo(-24, -26, -28, -82, 0, -98);
+    ctx.bezierCurveTo(28, -82, 24, -26, 0, -6);
     ctx.closePath();
     ctx.fillStyle = petalGrad;
     ctx.fill();
-
-    // Delicate inner petal vein
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, -14);
-    ctx.lineTo(0, -76);
-    ctx.stroke();
-
     ctx.restore();
   }
 
-  // Radiant golden stamen center
-  const core = ctx.createRadialGradient(cx, cy, 2, cx, cy, 28);
-  core.addColorStop(0, 'rgba(255, 255, 248, 1)');
-  core.addColorStop(0.45, 'rgba(255, 234, 178, 0.92)');
-  core.addColorStop(1, 'rgba(255, 212, 130, 0)');
+  // Warm sunlit golden stamen center
+  const core = ctx.createRadialGradient(cx, cy, 2, cx, cy, 24);
+  core.addColorStop(0, '#fff7cc');
+  core.addColorStop(0.55, '#f2bd52');
+  core.addColorStop(1, 'rgba(235, 168, 52, 0)');
   ctx.fillStyle = core;
   ctx.beginPath();
-  ctx.arc(cx, cy, 28, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 24, 0, Math.PI * 2);
   ctx.fill();
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -116,62 +106,30 @@ function createFlowerTexture(): THREE.CanvasTexture {
 }
 
 /**
- * Procedurally paints a delicate nocturnal fern/leaf cluster sprite texture.
+ * Single soft sakura petal texture for 3D floating petals drifting from the tree.
  */
-function createLeafTexture(): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  const cx = size / 2;
-  const cy = size / 2;
-
-  ctx.clearRect(0, 0, size, size);
-
-  const fronds = 3;
-  for (let i = 0; i < fronds; i++) {
-    const rot = (i - 1) * 0.58;
-    ctx.save();
-    ctx.translate(cx, cy + 44);
-    ctx.rotate(rot);
-
-    const grad = ctx.createLinearGradient(0, 0, 0, -146);
-    grad.addColorStop(0, 'rgba(130, 190, 175, 0.12)');
-    grad.addColorStop(0.45, 'rgba(165, 224, 206, 0.72)');
-    grad.addColorStop(1, 'rgba(215, 246, 238, 0.28)');
-
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.bezierCurveTo(-24, -44, -22, -108, 0, -150);
-    ctx.bezierCurveTo(22, -108, 24, -44, 0, 0);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-/**
- * Soft glowing radial bokeh dust sprite.
- */
-function createDustTexture(): THREE.CanvasTexture {
+function createPetalTexture(): THREE.CanvasTexture {
   const size = 64;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
-  const grad = ctx.createRadialGradient(32, 32, 1, 32, 32, 30);
-  grad.addColorStop(0, 'rgba(255, 250, 236, 1)');
-  grad.addColorStop(0.35, 'rgba(255, 236, 198, 0.55)');
-  grad.addColorStop(1, 'rgba(255, 236, 198, 0)');
+  ctx.clearRect(0, 0, size, size);
+
+  const grad = ctx.createLinearGradient(32, 6, 32, 58);
+  grad.addColorStop(0, '#ffe6ee');
+  grad.addColorStop(0.55, '#f4a6be');
+  grad.addColorStop(1, '#d87696');
+
+  ctx.beginPath();
+  ctx.moveTo(32, 58);
+  ctx.bezierCurveTo(10, 44, 8, 18, 24, 10);
+  ctx.lineTo(32, 17);
+  ctx.lineTo(40, 10);
+  ctx.bezierCurveTo(56, 18, 54, 44, 32, 58);
+  ctx.closePath();
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
+  ctx.fill();
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -180,41 +138,96 @@ function createDustTexture(): THREE.CanvasTexture {
 }
 
 /**
- * Volumetric moonbeam light-ray sprite texture.
+ * Painterly Sunset / Twilight Sky Dome Shader with warm peach-gold horizon,
+ * soft rose-lavender dusk gradient, golden sun halo, and drifting wispy clouds.
  */
-function createRayTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
+const SKY_VERTEX_SHADER = `
+  varying vec3 vWorldDir;
+  void main() {
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldDir = normalize(worldPos.xyz);
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
 
-  const gradY = ctx.createLinearGradient(0, 0, 0, 512);
-  gradY.addColorStop(0, 'rgba(220, 232, 255, 0)');
-  gradY.addColorStop(0.32, 'rgba(235, 230, 218, 0.24)');
-  gradY.addColorStop(0.75, 'rgba(245, 234, 210, 0.14)');
-  gradY.addColorStop(1, 'rgba(245, 234, 210, 0)');
+const SKY_FRAGMENT_SHADER = `
+  uniform float uTime;
+  uniform vec3 uSunDir;
+  uniform vec3 uAccentTint;
+  uniform float uTintMix;
+  varying vec3 vWorldDir;
 
-  const gradX = ctx.createLinearGradient(0, 0, 128, 0);
-  gradX.addColorStop(0, 'rgba(255,255,255,0)');
-  gradX.addColorStop(0.5, 'rgba(255,255,255,1)');
-  gradX.addColorStop(1, 'rgba(255,255,255,0)');
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+  }
 
-  ctx.fillStyle = gradY;
-  ctx.fillRect(0, 0, 128, 512);
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.fillStyle = gradX;
-  ctx.fillRect(0, 0, 128, 512);
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+      u.y
+    );
+  }
 
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-}
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 4; i++) {
+      v += a * noise(p);
+      p *= 2.05;
+      a *= 0.5;
+    }
+    return v;
+  }
+
+  void main() {
+    vec3 dir = normalize(vWorldDir);
+    float h = clamp(dir.y, -0.15, 1.0);
+
+    // Rich sunset-twilight gradient matching the golden-peach & rose-slate paintings
+    vec3 colHorizon = vec3(0.95, 0.72, 0.62); // warm peach-gold horizon
+    vec3 colMidLow  = vec3(0.75, 0.54, 0.60); // soft dusty rose
+    vec3 colMidHigh = vec3(0.32, 0.34, 0.46); // twilight mauve-slate
+    vec3 colZenith  = vec3(0.11, 0.14, 0.23); // serene dusk indigo
+
+    vec3 sky = mix(colHorizon, colMidLow, smoothstep(-0.02, 0.18, h));
+    sky = mix(sky, colMidHigh, smoothstep(0.16, 0.48, h));
+    sky = mix(sky, colZenith, smoothstep(0.45, 0.92, h));
+
+    // Warm sunset glow near horizon sun direction
+    float sunAmt = max(dot(dir, normalize(uSunDir)), 0.0);
+    sky += vec3(1.0, 0.78, 0.54) * pow(sunAmt, 7.0) * 0.55;
+    sky += vec3(1.0, 0.92, 0.78) * pow(sunAmt, 42.0) * 0.62;
+
+    // Painterly sunset clouds sweeping slowly across the upper horizon
+    if (dir.y > 0.02) {
+      vec2 cloudUv = dir.xz / (dir.y + 0.18) * 1.15;
+      cloudUv.x += uTime * 0.012;
+      cloudUv.y -= uTime * 0.005;
+      float c1 = fbm(cloudUv * 1.4);
+      float c2 = fbm(cloudUv * 2.8 + vec2(3.1, 1.7));
+      float cloudMask = smoothstep(0.44, 0.78, c1 * 0.7 + c2 * 0.3) * smoothstep(0.02, 0.22, dir.y) * (1.0 - smoothstep(0.55, 0.95, dir.y));
+
+      vec3 cloudShadow = vec3(0.30, 0.26, 0.36);
+      vec3 cloudLit = mix(vec3(0.99, 0.80, 0.72), vec3(1.0, 0.90, 0.76), pow(sunAmt, 2.0));
+      vec3 cloudCol = mix(cloudShadow, cloudLit, smoothstep(0.35, 0.75, c2 + sunAmt * 0.45));
+      sky = mix(sky, cloudCol, cloudMask * 0.65);
+    }
+
+    // Subtle member accent wash when hovering a HUB Network portrait
+    sky = mix(sky, mix(sky, uAccentTint * 0.75, 0.25), uTintMix * 0.45);
+
+    gl_FragColor = vec4(sky, 1.0);
+  }
+`;
 
 /**
- * Custom Post-Processing Shader: Split-RGB film grain noise + dynamic speed vignette.
+ * Custom Post-Processing: warm sunset film grain + gentle split-RGB + dynamic speed vignette.
  */
-const SplitRgbVignetteShader = {
+const SunsetPostShader = {
   uniforms: {
     tDiffuse: { value: null },
     uTime: { value: 0 },
@@ -245,8 +258,7 @@ const SplitRgbVignetteShader = {
       vec2 centered = vUv - 0.5;
       float dist = length(centered);
 
-      // Subtle split-RGB chromatic shift that increases smoothly with scroll speed
-      float rgbShift = (0.0011 + clamp(uSpeed * 0.012, 0.0, 0.0055) + uDisperse * 0.0012) * dist;
+      float rgbShift = (0.0008 + clamp(uSpeed * 0.008, 0.0, 0.004) + uDisperse * 0.001) * dist;
       vec2 offset = centered * rgbShift;
 
       float r = texture2D(tDiffuse, vUv + offset).r;
@@ -254,14 +266,13 @@ const SplitRgbVignetteShader = {
       float b = texture2D(tDiffuse, vUv - offset).b;
       vec3 color = vec3(r, g, b);
 
-      // Fine organic film noise
-      float grain = (hash12(vUv * 820.0 + fract(uTime * 17.3)) - 0.5) * 0.032;
+      // Soft cinematic film grain
+      float grain = (hash12(vUv * 760.0 + fract(uTime * 15.1)) - 0.5) * 0.024;
       color += grain;
 
-      // Dynamic speed vignette (tightens gently when wandering fast)
-      float vigStart = mix(0.38, 0.24, clamp(uSpeed * 2.2, 0.0, 1.0));
-      float vigEnd = mix(0.98, 0.78, clamp(uSpeed * 2.2, 0.0, 1.0));
-      float vignette = 1.0 - smoothstep(vigStart, vigEnd, dist) * (0.62 + clamp(uSpeed * 0.35, 0.0, 0.25));
+      // Soft painterly edge vignette
+      float vigStart = mix(0.42, 0.28, clamp(uSpeed * 1.8, 0.0, 1.0));
+      float vignette = 1.0 - smoothstep(vigStart, 1.05, dist) * (0.44 + clamp(uSpeed * 0.2, 0.0, 0.18));
       color *= vignette;
 
       gl_FragColor = vec4(color, 1.0);
@@ -269,16 +280,14 @@ const SplitRgbVignetteShader = {
   `,
 };
 
-const FLOWER_VERTEX_SHADER = `
+const MEADOW_FLOWER_VERTEX = `
   uniform float uTime;
   uniform float uPixelRatio;
   uniform vec2 uMouseNdc;
   uniform float uMouseActive;
   uniform float uDisperse;
-  uniform float uBloomBoost;
   uniform float uBurstProgress;
   uniform vec3 uBurstOrigin;
-  uniform float uIsLeaf;
 
   attribute float aScale;
   attribute float aPhase;
@@ -289,123 +298,118 @@ const FLOWER_VERTEX_SHADER = `
   varying float vAlpha;
   varying float vGlow;
   varying float vRotation;
+  varying float vFogFactor;
 
   void main() {
     vec3 pos = position;
 
-    // Gentle nocturnal wind sway
-    float sway = sin(uTime * 0.95 + aPhase + pos.x * 0.22 + pos.z * 0.18) * 0.16;
-    pos.x += sway;
-    pos.y += cos(uTime * 0.72 + aPhase) * 0.09;
+    // Gentle wind wave rolling across the wildflower meadow
+    float wind = sin(uTime * 1.25 + pos.x * 0.28 + pos.z * 0.22 + aPhase) * 0.15;
+    pos.x += wind;
+    pos.z += cos(uTime * 0.95 + pos.x * 0.2 + aPhase) * 0.08;
 
-    // Hover transition: disperse flowers outward into floating glowing stardust
+    // Hover transition: petals lift softly into swirling sunset stardust
     float d = uDisperse;
     if (d > 0.001) {
-      float swirlAngle = d * (1.8 + aPhase * 0.18);
-      float c = cos(swirlAngle);
-      float s = sin(swirlAngle);
+      float swirl = d * (1.7 + aPhase * 0.2);
+      float c = cos(swirl);
+      float s = sin(swirl);
       vec3 dir = aDisperseDir;
-      vec3 swirled = vec3(dir.x * c - dir.z * s, dir.y + d * 2.8, dir.x * s + dir.z * c);
-      pos += swirled * (d * d * 7.5);
+      vec3 swirled = vec3(dir.x * c - dir.z * s, dir.y + d * 2.4, dir.x * s + dir.z * c);
+      pos += swirled * (d * d * 4.5);
     }
 
-    // Celebration bloom wave rising through the valley
+    // Celebration bloom wave
     float burstGlow = 0.0;
     if (uBurstProgress > 0.001 && uBurstProgress < 0.999) {
       float distFromOrigin = length(pos - uBurstOrigin);
-      float ringRadius = uBurstProgress * 46.0;
-      float ring = exp(-pow((distFromOrigin - ringRadius) * 0.22, 2.0)) * (1.0 - uBurstProgress);
-      pos.y += ring * 2.4;
-      burstGlow = ring * 1.45;
+      float ringRadius = uBurstProgress * 36.0;
+      float ring = exp(-pow((distFromOrigin - ringRadius) * 0.25, 2.0)) * (1.0 - uBurstProgress);
+      pos.y += ring * 1.45;
+      burstGlow = ring * 1.35;
     }
 
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     float camDist = -mvPosition.z;
-
-    // Project to clip/NDC space for screen-space cursor repulsion & bioluminescence
     vec4 clipPos = projectionMatrix * mvPosition;
-    float mouseGlow = 0.0;
 
+    // Cursor parts flowers gently in screen space and catches warm sunset shimmer
+    float mouseGlow = 0.0;
     if (clipPos.w > 0.05 && uMouseActive > 0.01) {
       vec2 ndc = clipPos.xy / clipPos.w;
       vec2 delta = ndc - uMouseNdc;
-      // Aspect-neutral circular push feel
       float distToMouse = length(delta);
-      float radius = 0.34;
+      float radius = 0.30;
       if (distToMouse < radius) {
         float strength = pow(1.0 - distToMouse / radius, 2.0) * uMouseActive;
-        // Stronger push closer to camera
-        float depthWeight = clamp(18.0 / max(camDist, 3.0), 0.35, 1.8);
+        float depthWeight = clamp(12.0 / max(camDist, 2.2), 0.3, 1.5);
         vec2 pushDir = normalize(delta + vec2(0.0001, 0.0001));
-        clipPos.xy += pushDir * strength * 0.145 * depthWeight * clipPos.w;
-        mouseGlow = strength * 1.35;
+        clipPos.xy += pushDir * strength * 0.11 * depthWeight * clipPos.w;
+        mouseGlow = strength * 0.9;
       }
     }
 
     gl_Position = clipPos;
 
-    // Proximity blooming: flowers bloom large as they approach camera; leaves appear further back
-    float nearFade = smoothstep(1.2, 4.2, camDist);
-    float farFade = 1.0 - smoothstep(26.0, 62.0, camDist);
-    float bloomGrow = uIsLeaf > 0.5
-      ? smoothstep(5.5, 17.0, camDist) * (1.0 - smoothstep(32.0, 58.0, camDist))
-      : smoothstep(38.0, 7.5, camDist);
-
-    float scaleFactor = mix(0.32, 1.25, bloomGrow);
-    // Shrink slightly into luminous glowing stardust points when dispersed
-    scaleFactor = mix(scaleFactor, 0.56, d);
-
-    float size = aScale * scaleFactor * (220.0 / max(camDist, 1.5)) * uPixelRatio;
-    size *= (1.0 + mouseGlow * 0.32 + burstGlow * 0.45);
-    gl_PointSize = clamp(size, 1.5, 92.0);
-
-    // Shimmer pulse
-    float pulse = 0.86 + 0.14 * sin(uTime * 1.6 + aPhase * 3.1);
+    float nearFade = smoothstep(0.9, 2.6, camDist);
+    float farFade = 1.0 - smoothstep(34.0, 74.0, camDist);
+    float size = aScale * (185.0 / max(camDist, 1.2)) * uPixelRatio;
+    size *= (1.0 + mouseGlow * 0.28 + burstGlow * 0.38);
+    gl_PointSize = clamp(size, 2.0, 68.0);
 
     vColor = aColor;
-    vGlow = (mouseGlow + burstGlow + d * 0.55 + uBloomBoost) * pulse;
-    vAlpha = nearFade * farFade * (uIsLeaf > 0.5 ? 0.62 : 0.92);
-    vRotation = aPhase + uTime * 0.12 * (mod(aPhase, 2.0) > 1.0 ? 1.0 : -1.0);
+    vGlow = mouseGlow + burstGlow + d * 0.42;
+    vAlpha = nearFade * farFade * 0.96;
+    vRotation = aPhase + wind * 1.6;
+    vFogFactor = smoothstep(22.0, 72.0, camDist);
   }
 `;
 
-const FLOWER_FRAGMENT_SHADER = `
+const MEADOW_FLOWER_FRAGMENT = `
   uniform sampler2D uTexture;
   uniform vec3 uAccentTint;
   uniform float uTintMix;
-  uniform float uDisperse;
-  uniform float uIsLeaf;
+  uniform vec3 uFogColor;
 
   varying vec3 vColor;
   varying float vAlpha;
   varying float vGlow;
   varying float vRotation;
+  varying float vFogFactor;
 
   void main() {
     if (vAlpha < 0.01) discard;
 
-    // Rotate point sprite UV gently
     vec2 uv = gl_PointCoord - 0.5;
     float c = cos(vRotation);
     float s = sin(vRotation);
     vec2 rotUv = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c) + 0.5;
 
     vec4 tex = texture2D(uTexture, rotUv);
+    if (tex.a < 0.08) discard;
 
-    // During hover dispersion, morph softly from botanical petal toward glowing stardust orb
-    float radial = 1.0 - smoothstep(0.0, 0.48, length(uv));
-    float stardustAlpha = pow(radial, 1.85);
-    float spriteAlpha = mix(tex.a, max(tex.a * 0.4, stardustAlpha), uDisperse * 0.82);
+    vec3 baseCol = mix(vColor, mix(vColor, uAccentTint, 0.42), uTintMix);
+    vec3 sunlit = baseCol * tex.rgb + vec3(1.0, 0.90, 0.78) * vGlow * 0.58;
+    vec3 finalCol = mix(sunlit, uFogColor, vFogFactor * 0.78);
 
-    if (spriteAlpha < 0.02) discard;
-
-    vec3 baseCol = mix(vColor, mix(vColor, uAccentTint, 0.55), uTintMix);
-    vec3 glowColor = mix(vec3(1.0, 0.96, 0.86), uAccentTint, 0.35);
-    vec3 finalCol = baseCol * tex.rgb + glowColor * vGlow * (uIsLeaf > 0.5 ? 0.32 : 0.72);
-
-    gl_FragColor = vec4(finalCol, spriteAlpha * vAlpha);
+    gl_FragColor = vec4(finalCol, tex.a * vAlpha);
   }
 `;
+
+interface PetalState {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  rx: number;
+  ry: number;
+  rz: number;
+  vrx: number;
+  vry: number;
+  scale: number;
+}
 
 export class NightValleyEngine {
   private container: HTMLElement;
@@ -419,16 +423,17 @@ export class NightValleyEngine {
   private bloomPass: UnrealBloomPass | null = null;
   private postPass: ShaderPass | null = null;
 
-  private pathCurve: THREE.CatmullRomCurve3;
+  private skyMat: THREE.ShaderMaterial;
   private flowerMat: THREE.ShaderMaterial;
-  private leafMat: THREE.ShaderMaterial;
-  private dustMat: THREE.PointsMaterial;
-  private dustMesh: THREE.Points;
-  private rayMeshes: THREE.Mesh[] = [];
+  private grassMesh: THREE.InstancedMesh | null = null;
+  private petalMesh: THREE.InstancedMesh;
+  private petals: PetalState[] = [];
+  private warriorRig: WarriorSceneRig;
   private disposables: Array<{ dispose: () => void }> = [];
 
-  private scrollProgress = 0;
-  private scrollVelocity = 0;
+  // Orbital camera state revolving gracefully around the resting warrior & blossom tree
+  private orbitAngle = -0.38; // Scenic starting angle: warrior & tree on right-center, sunset flower valley stretching left
+  private orbitVelocity = 0;
   private mouseNdc = new THREE.Vector2(0, 0);
   private smoothMouseNdc = new THREE.Vector2(0, 0);
   private mouseActive = 0;
@@ -439,8 +444,8 @@ export class NightValleyEngine {
   private introProgress = 0;
   private introReported = false;
 
-  private accentColor = new THREE.Color('#f5efe2');
-  private targetAccentColor = new THREE.Color('#f5efe2');
+  private accentColor = new THREE.Color('#f6bfd0');
+  private targetAccentColor = new THREE.Color('#f6bfd0');
   private accentMix = 0;
   private targetAccentMix = 0;
 
@@ -453,8 +458,9 @@ export class NightValleyEngine {
   private isDisposed = false;
   private reducedMotion = false;
   private scrollLocked = false;
-
   private lastTouchY: number | null = null;
+
+  private readonly fogColor = new THREE.Color('#6f5b6a');
 
   constructor(container: HTMLElement, callbacks: NightValleyCallbacks = {}) {
     this.container = container;
@@ -472,10 +478,11 @@ export class NightValleyEngine {
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.08;
     this.renderer.setPixelRatio(this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(width, height);
-    this.renderer.setClearColor(0x03050a, 1);
+    this.renderer.shadowMap.enabled = !this.isSoftwareGl;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.renderer.domElement.style.display = 'block';
     this.renderer.domElement.style.width = '100%';
@@ -483,61 +490,59 @@ export class NightValleyEngine {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x03050a);
-    this.scene.fog = new THREE.FogExp2(0x03050a, 0.0175);
+    this.scene.background = this.fogColor.clone();
+    this.scene.fog = new THREE.FogExp2(this.fogColor.getHex(), 0.0115);
 
-    this.camera = new THREE.PerspectiveCamera(52, width / height, 0.1, 140);
+    // Mandatory Studio/Environment Reflection map for realistic dark-steel armor & greatsword gleam
+    const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+    const envRT = pmremGenerator.fromScene(new RoomEnvironment(), 0.04);
+    this.scene.environment = envRT.texture;
+    this.disposables.push(envRT);
+    pmremGenerator.dispose();
 
-    // Closed winding night-valley flight loop
-    this.pathCurve = new THREE.CatmullRomCurve3(
-      [
-        new THREE.Vector3(0, 3.6, 42),
-        new THREE.Vector3(16, 3.2, 26),
-        new THREE.Vector3(24, 4.1, 4),
-        new THREE.Vector3(14, 3.0, -20),
-        new THREE.Vector3(-4, 3.8, -36),
-        new THREE.Vector3(-22, 3.3, -22),
-        new THREE.Vector3(-25, 4.2, 3),
-        new THREE.Vector3(-15, 3.1, 27),
-      ],
-      true,
-      'catmullrom',
-      0.5
-    );
+    this.camera = new THREE.PerspectiveCamera(46, width / height, 0.1, 260);
 
-    const flowerTex = createFlowerTexture();
-    const leafTex = createLeafTexture();
-    const dustTex = createDustTexture();
-    const rayTex = createRayTexture();
-    this.disposables.push(flowerTex, leafTex, dustTex, rayTex);
+    // 1. Sunset-Twilight Sky Dome
+    this.skyMat = this.buildSkyDome();
 
-    // 1. Subtle nocturnal valley terrain silhouette beneath flowers
-    this.buildValleyGround();
+    // 2. Golden-Hour 3-Point Lighting Rig
+    this.buildLighting();
 
-    // 2. Luminous flower field + deep botanical leaves
-    this.flowerMat = this.createFieldMaterial(flowerTex, false);
-    this.leafMat = this.createFieldMaterial(leafTex, true);
-    this.buildFloraField(11500, this.flowerMat, false, 1911);
-    this.buildFloraField(5200, this.leafMat, true, 2026);
+    // 3. Rolling Meadow Terrain + Layered Distant Mountain Ridges
+    this.buildMeadowTerrain();
+    this.buildDistantMountains();
 
-    // 3. Drifting golden pollen / dust embers
-    const { dustMesh, dustMat } = this.buildDustParticles(dustTex, 950);
-    this.dustMesh = dustMesh;
-    this.dustMat = dustMat;
+    // 4. Resting Armored Warrior + Greatsword + Ancient Blossom Tree at the heart of the meadow
+    const maxAniso = this.renderer.capabilities.getMaxAnisotropy();
+    this.warriorRig = createRestingWarriorTableau(maxAniso, !this.isSoftwareGl);
+    const centerGroundY = this.getTerrainHeight(0, 0);
+    this.warriorRig.group.position.set(0, centerGroundY, 0);
+    this.scene.add(this.warriorRig.group);
+    this.disposables.push(...this.warriorRig.disposables);
 
-    // 4. Volumetric moonlight ray sprites
-    this.buildLightRays(rayTex);
+    // 5. Swaying Meadow Grass Blades (InstancedMesh)
+    this.grassMesh = this.buildMeadowGrass(6800);
 
-    // 5. Post-Processing pipeline (GPU devices get UnrealBloom + Split-RGB Noise + Dynamic Vignette)
+    // 6. Lush Pink/Cream/Golden Wildflower Meadow (13,500 custom GLSL flower sprites)
+    const flowerTex = createWildflowerTexture();
+    flowerTex.anisotropy = maxAniso;
+    this.disposables.push(flowerTex);
+    this.flowerMat = this.buildWildflowerField(13500, flowerTex);
+
+    // 7. 3D Falling Sakura Petals drifting from the overhanging blossom tree
+    const petalTex = createPetalTexture();
+    this.disposables.push(petalTex);
+    this.petalMesh = this.buildFallingPetals(420, petalTex);
+
+    // 8. Post-Processing pipeline (GPU devices get soft sunset Bloom + Film Grain + Vignette)
     if (!this.isSoftwareGl) {
       this.composer = new EffectComposer(this.renderer);
-      const renderPass = new RenderPass(this.scene, this.camera);
-      this.composer.addPass(renderPass);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
 
-      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.72, 0.55, 0.24);
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.42, 0.55, 0.62);
       this.composer.addPass(this.bloomPass);
 
-      this.postPass = new ShaderPass(SplitRgbVignetteShader);
+      this.postPass = new ShaderPass(SunsetPostShader);
       this.composer.addPass(this.postPass);
 
       this.renderer.compile(this.scene, this.camera);
@@ -545,7 +550,6 @@ export class NightValleyEngine {
 
     this.bindEvents();
 
-    // Notify loaded on next animation frame so loader fades cleanly
     requestAnimationFrame(() => {
       if (!this.isDisposed) {
         this.callbacks.onLoaded?.();
@@ -557,142 +561,289 @@ export class NightValleyEngine {
   }
 
   private getTerrainHeight(x: number, z: number): number {
-    // Compute distance from the valley loop centerline so the camera glides through a natural valley depression
     const r = Math.hypot(x, z);
-    const ringDist = Math.abs(r - 28.0);
-    const valleySlope = Math.pow(Math.min(ringDist / 16.0, 1.8), 1.65) * 4.4;
-    const rollingHills =
-      Math.sin(x * 0.085) * Math.cos(z * 0.085) * 2.1 +
-      Math.sin(x * 0.19 + z * 0.14) * 0.75 +
-      Math.cos(x * 0.05 - z * 0.11) * 1.4;
-    return valleySlope + rollingHills - 1.1;
+    // Keep a gentle flat knoll right under the warrior & tree (radius < 4.5), then softly roll outward
+    const knollBlend = THREE.MathUtils.smoothstep(r, 3.2, 14.0);
+    const rolling =
+      Math.sin(x * 0.065) * Math.cos(z * 0.065) * 1.45 +
+      Math.sin(x * 0.14 + z * 0.11) * 0.42 +
+      Math.cos(r * 0.08) * 0.65;
+    // Slight bowl rise on distant perimeter so meadow stretches toward mountain foothills
+    const rimRise = Math.pow(Math.max(0, r - 30) / 36, 1.7) * 5.2;
+    return rolling * knollBlend + rimRise;
   }
 
-  private buildValleyGround(): void {
-    const geom = new THREE.PlaneGeometry(170, 170, 84, 84);
+  private buildSkyDome(): THREE.ShaderMaterial {
+    const geom = new THREE.SphereGeometry(210, 40, 24);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uSunDir: { value: new THREE.Vector3(-0.78, 0.19, -0.58).normalize() },
+        uAccentTint: { value: _defaultAccent.clone() },
+        uTintMix: { value: 0 },
+      },
+      vertexShader: SKY_VERTEX_SHADER,
+      fragmentShader: SKY_FRAGMENT_SHADER,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+    });
+    const dome = new THREE.Mesh(geom, mat);
+    this.scene.add(dome);
+    this.disposables.push(geom, mat);
+    return mat;
+  }
+
+  private buildLighting(): void {
+    // Cool dusk sky / warm olive-meadow ground hemisphere fill
+    const hemi = new THREE.HemisphereLight(0xe0b5c4, 0x2b3322, 1.05);
+    this.scene.add(hemi);
+
+    // Warm golden-peach sunset key light catching the warrior's armor & blossom canopy
+    const sunKey = new THREE.DirectionalLight(0xffc394, 2.55);
+    sunKey.position.set(-22, 12, -16);
+    if (!this.isSoftwareGl) {
+      sunKey.castShadow = true;
+      sunKey.shadow.mapSize.set(2048, 2048);
+      sunKey.shadow.camera.near = 2;
+      sunKey.shadow.camera.far = 55;
+      sunKey.shadow.camera.left = -10;
+      sunKey.shadow.camera.right = 10;
+      sunKey.shadow.camera.top = 10;
+      sunKey.shadow.camera.bottom = -10;
+      sunKey.shadow.bias = -0.0005;
+      sunKey.shadow.normalBias = 0.025;
+    }
+    this.scene.add(sunKey);
+
+    // Subtle cool lavender-blue rim light separating the dark armor silhouette from the tree
+    const rimLight = new THREE.DirectionalLight(0x9fb8e6, 0.95);
+    rimLight.position.set(16, 10, 18);
+    this.scene.add(rimLight);
+  }
+
+  private buildMeadowTerrain(): void {
+    const geom = new THREE.PlaneGeometry(175, 175, 110, 110);
     geom.rotateX(-Math.PI / 2);
+
     const pos = geom.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const colNear = new THREE.Color('#28331f'); // lush mossy meadow olive-green
+    const colMid = new THREE.Color('#343c27');
+    const colPinkTint = new THREE.Color('#4d3c3f'); // soft wildflower blanket hint in distance
+    const c = new THREE.Color();
+
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
-      pos.setY(i, this.getTerrainHeight(x, z) - 0.35);
+      const y = this.getTerrainHeight(x, z);
+      pos.setY(i, y);
+
+      const r = Math.hypot(x, z);
+      const patch = 0.5 + 0.5 * Math.sin(x * 0.17) * Math.cos(z * 0.19);
+      c.copy(colNear).lerp(colMid, patch * 0.65);
+      if (r > 12) {
+        c.lerp(colPinkTint, THREE.MathUtils.smoothstep(r, 12, 52) * 0.52);
+      }
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
     }
+
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geom.computeVertexNormals();
 
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x050811,
-      wireframe: false,
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.95,
+      metalness: 0.0,
     });
-
     const mesh = new THREE.Mesh(geom, mat);
+    mesh.receiveShadow = !this.isSoftwareGl;
     this.scene.add(mesh);
     this.disposables.push(geom, mat);
   }
 
-  private createFieldMaterial(texture: THREE.CanvasTexture, isLeaf: boolean): THREE.ShaderMaterial {
-    const mat = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uPixelRatio: { value: this.renderer.getPixelRatio() },
-        uTexture: { value: texture },
-        uMouseNdc: { value: new THREE.Vector2(0, 0) },
-        uMouseActive: { value: 0 },
-        uDisperse: { value: 0 },
-        uBloomBoost: { value: 0 },
-        uBurstProgress: { value: 1 },
-        uBurstOrigin: { value: new THREE.Vector3() },
-        uAccentTint: { value: _defaultAccent.clone() },
-        uTintMix: { value: 0 },
-        uIsLeaf: { value: isLeaf ? 1.0 : 0.0 },
-      },
-      vertexShader: FLOWER_VERTEX_SHADER,
-      fragmentShader: FLOWER_FRAGMENT_SHADER,
-      transparent: true,
-      depthWrite: false,
-      blending: isLeaf ? THREE.NormalBlending : THREE.AdditiveBlending,
+  /**
+   * Layered atmospheric distant mountain ridges encircling the meadow horizon.
+   */
+  private buildDistantMountains(): void {
+    const rings = [
+      { radius: 78, height: 14, color: '#4c4657', seed: 1.2 },
+      { radius: 112, height: 26, color: '#615669', seed: 3.7 },
+      { radius: 148, height: 38, color: '#786778', seed: 6.4 },
+    ];
+
+    rings.forEach((ring) => {
+      const segs = 128;
+      const geom = new THREE.CylinderGeometry(ring.radius, ring.radius * 1.06, ring.height, segs, 4, true);
+      const pos = geom.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        const angle = Math.atan2(z, x);
+        // Sculpt peaks along the top vertices only
+        if (y > 0) {
+          const peak =
+            Math.sin(angle * 5 + ring.seed) * 0.45 +
+            Math.sin(angle * 11 - ring.seed * 1.4) * 0.25 +
+            Math.cos(angle * 19 + ring.seed * 2.1) * 0.14;
+          pos.setY(i, y * (0.55 + peak * 0.72));
+        } else {
+          pos.setY(i, -6);
+        }
+      }
+      geom.computeVertexNormals();
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(ring.color),
+        side: THREE.BackSide,
+        fog: true,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.y = ring.height * 0.22;
+      this.scene.add(mesh);
+      this.disposables.push(geom, mat);
     });
-    this.disposables.push(mat);
-    return mat;
   }
 
-  private buildFloraField(
-    count: number,
-    material: THREE.ShaderMaterial,
-    isLeaf: boolean,
-    seed: number
-  ): void {
-    const rand = seededRandom(seed);
+  /**
+   * Instanced swaying grass blades framing the foreground and surrounding the resting warrior.
+   */
+  private buildMeadowGrass(count: number): THREE.InstancedMesh {
+    const rand = seededRandom(4409);
+
+    // Tapered curved grass blade geometry pivoted at bottom-center
+    const bladeGeo = new THREE.PlaneGeometry(0.085, 0.72, 1, 3);
+    bladeGeo.translate(0, 0.36, 0);
+    const bPos = bladeGeo.attributes.position;
+    for (let i = 0; i < bPos.count; i++) {
+      const y = bPos.getY(i);
+      const t = y / 0.72;
+      bPos.setX(i, bPos.getX(i) * (1.0 - t * 0.88)); // sharp tip taper
+      bPos.setZ(i, t * t * 0.16); // natural graceful bend
+    }
+    bladeGeo.computeVertexNormals();
+
+    const grassMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#5a6b3e'),
+      roughness: 0.86,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+
+    const mesh = new THREE.InstancedMesh(bladeGeo, grassMat, count);
+    const colorChoices = [
+      new THREE.Color('#3b4a27'),
+      new THREE.Color('#4c5c32'),
+      new THREE.Color('#66723a'),
+      new THREE.Color('#7a6e3e'), // warm golden-olive dry tips catching sunset
+    ];
+
+    for (let i = 0; i < count; i++) {
+      const angle = rand() * Math.PI * 2;
+      const dist = 1.1 + Math.pow(rand(), 0.75) * 34;
+      const x = Math.cos(angle) * dist;
+      const z = Math.sin(angle) * dist;
+
+      // Avoid planting tall grass directly inside the solid tree trunk footprint
+      if (Math.hypot(x - 1.55, z + 0.95) < 1.25) {
+        _dummy.scale.setScalar(0.001);
+        _dummy.position.set(0, -10, 0);
+      } else {
+        const y = this.getTerrainHeight(x, z);
+        _dummy.position.set(x, y - 0.04, z);
+        _dummy.rotation.set(
+          (rand() - 0.5) * 0.28,
+          rand() * Math.PI * 2,
+          (rand() - 0.5) * 0.25
+        );
+        const s = 0.65 + rand() * 0.95;
+        _dummy.scale.set(s, s * (0.75 + rand() * 0.65), s);
+      }
+      _dummy.updateMatrix();
+      mesh.setMatrixAt(i, _dummy.matrix);
+      mesh.setColorAt(i, colorChoices[Math.floor(rand() * colorChoices.length)]);
+    }
+
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.frustumCulled = false;
+
+    this.scene.add(mesh);
+    this.disposables.push(bladeGeo, grassMat);
+    return mesh;
+  }
+
+  /**
+   * Lush pink, rose-blush, cream-white daisies & golden wildflowers blanketing the entire meadow.
+   */
+  private buildWildflowerField(count: number, texture: THREE.CanvasTexture): THREE.ShaderMaterial {
+    const rand = seededRandom(19112026);
     const positions = new Float32Array(count * 3);
     const scales = new Float32Array(count);
     const phases = new Float32Array(count);
     const colors = new Float32Array(count * 3);
     const disperseDirs = new Float32Array(count * 3);
 
-    // Curated nocturnal botanical palette (warm cream, moonlight amber, pale gold, soft indigo-blue, emerald mist)
-    const flowerPalette = [
-      new THREE.Color('#f7efe0'), // warm cream
-      new THREE.Color('#f5d491'), // warm amber gold
-      new THREE.Color('#d8e6ff'), // starlight blue-white
-      new THREE.Color('#e6c9a8'), // champagne petal
-      new THREE.Color('#95d5c6'), // moonlit sage
-      new THREE.Color('#f0b699'), // soft warm coral glow
+    // Palette inspired directly by the 3 reference paintings: sakura pink, blush rose, daisy white, sunset gold
+    const palette = [
+      new THREE.Color('#f4a6be'), // soft sakura pink
+      new THREE.Color('#f8c7d5'), // pale blush pink
+      new THREE.Color('#e47ea0'), // rich wild rose
+      new THREE.Color('#fbf4eb'), // cream white daisy
+      new THREE.Color('#f2d594'), // warm sunset goldenrod
+      new THREE.Color('#e8997c'), // peach sunset bloom
+      new THREE.Color('#fff9f2'), // bright white daisy
     ];
-
-    const leafPalette = [
-      new THREE.Color('#1c4445'),
-      new THREE.Color('#275b56'),
-      new THREE.Color('#193349'),
-      new THREE.Color('#306658'),
-    ];
-
-    const palette = isLeaf ? leafPalette : flowerPalette;
 
     for (let i = 0; i < count; i++) {
-      // Cluster 75% along the winding valley corridor for lush immersion, 25% across wider rolling hills
-      let x = 0;
-      let z = 0;
-      if (rand() < 0.78) {
-        const t = rand();
-        const pt = this.pathCurve.getPointAt(t);
-        const tangent = this.pathCurve.getTangentAt(t);
-        const sideX = -tangent.z;
-        const sideZ = tangent.x;
-        // Leave a narrow breathing path right under the lens while banks burst with flowers
-        const sideSign = rand() > 0.5 ? 1 : -1;
-        const lateral = sideSign * (1.2 + Math.pow(rand(), 1.35) * 26.0);
-        const jitter = (rand() - 0.5) * 4.0;
-        x = pt.x + sideX * lateral + tangent.x * jitter;
-        z = pt.z + sideZ * lateral + tangent.z * jitter;
-      } else {
-        const angle = rand() * Math.PI * 2;
-        const dist = 5 + Math.sqrt(rand()) * 66;
-        x = Math.cos(angle) * dist;
-        z = Math.sin(angle) * dist;
+      const angle = rand() * Math.PI * 2;
+      // Rich density close around the resting warrior, tapering smoothly across the vast hills
+      const dist = 0.9 + Math.pow(rand(), 0.72) * 58;
+      let x = Math.cos(angle) * dist;
+      let z = Math.sin(angle) * dist;
+
+      // Push flowers just outside the solid tree trunk core so they hug the mossy roots naturally
+      const dxTree = x - 1.55;
+      const dzTree = z + 0.95;
+      const dTree = Math.hypot(dxTree, dzTree);
+      if (dTree < 1.35) {
+        const push = (1.35 + rand() * 0.6) / Math.max(dTree, 0.01);
+        x = 1.55 + dxTree * push;
+        z = -0.95 + dzTree * push;
       }
 
       const groundY = this.getTerrainHeight(x, z);
-      const stalkHeight = isLeaf ? 0.1 + rand() * 0.75 : 0.25 + rand() * 1.45;
+      const bloomHeight = 0.22 + rand() * 0.58;
 
       positions[i * 3] = x;
-      positions[i * 3 + 1] = groundY + stalkHeight;
+      positions[i * 3 + 1] = groundY + bloomHeight;
       positions[i * 3 + 2] = z;
 
-      scales[i] = isLeaf ? 0.85 + rand() * 1.35 : 0.55 + Math.pow(rand(), 1.8) * 1.65;
+      scales[i] = 0.58 + Math.pow(rand(), 1.5) * 1.15;
       phases[i] = rand() * Math.PI * 2;
 
-      const baseCol = palette[Math.floor(rand() * palette.length)];
-      const shade = 0.78 + rand() * 0.35;
+      // Slight spatial color clustering so fields look organically painted like the reference art
+      const clusterWave = Math.sin(x * 0.12) * Math.cos(z * 0.12);
+      let baseCol: THREE.Color;
+      if (clusterWave > 0.35 && rand() < 0.65) {
+        baseCol = palette[rand() < 0.5 ? 0 : 1]; // lush pink cosmos drifts
+      } else if (clusterWave < -0.35 && rand() < 0.55) {
+        baseCol = palette[rand() < 0.5 ? 3 : 4]; // white daisy & golden wildflower drifts
+      } else {
+        baseCol = palette[Math.floor(rand() * palette.length)];
+      }
+
+      const shade = 0.84 + rand() * 0.24;
       colors[i * 3] = Math.min(1, baseCol.r * shade);
       colors[i * 3 + 1] = Math.min(1, baseCol.g * shade);
       colors[i * 3 + 2] = Math.min(1, baseCol.b * shade);
 
-      // Outward/upward curl vector for hover dispersion
       const theta = rand() * Math.PI * 2;
-      const up = 0.25 + rand() * 1.15;
-      const spread = 0.4 + rand() * 1.35;
-      disperseDirs[i * 3] = Math.cos(theta) * spread;
-      disperseDirs[i * 3 + 1] = up;
-      disperseDirs[i * 3 + 2] = Math.sin(theta) * spread;
+      disperseDirs[i * 3] = Math.cos(theta) * (0.5 + rand() * 1.1);
+      disperseDirs[i * 3 + 1] = 0.4 + rand() * 1.3;
+      disperseDirs[i * 3 + 2] = Math.sin(theta) * (0.5 + rand() * 1.1);
     }
 
     const geom = new THREE.BufferGeometry();
@@ -702,70 +853,72 @@ export class NightValleyEngine {
     geom.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
     geom.setAttribute('aDisperseDir', new THREE.BufferAttribute(disperseDirs, 3));
 
-    const points = new THREE.Points(geom, material);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: this.renderer.getPixelRatio() },
+        uTexture: { value: texture },
+        uMouseNdc: { value: new THREE.Vector2(0, 0) },
+        uMouseActive: { value: 0 },
+        uDisperse: { value: 0 },
+        uBurstProgress: { value: 1 },
+        uBurstOrigin: { value: new THREE.Vector3() },
+        uAccentTint: { value: _defaultAccent.clone() },
+        uTintMix: { value: 0 },
+        uFogColor: { value: this.fogColor.clone() },
+      },
+      vertexShader: MEADOW_FLOWER_VERTEX,
+      fragmentShader: MEADOW_FLOWER_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+    });
+
+    const points = new THREE.Points(geom, mat);
     points.frustumCulled = false;
     this.scene.add(points);
-    this.disposables.push(geom);
-  }
-
-  private buildDustParticles(
-    dustTex: THREE.CanvasTexture,
-    count: number
-  ): { dustMesh: THREE.Points; dustMat: THREE.PointsMaterial } {
-    const rand = seededRandom(7711);
-    const positions = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const angle = rand() * Math.PI * 2;
-      const radius = 8 + rand() * 44;
-      positions[i * 3] = Math.cos(angle) * radius;
-      positions[i * 3 + 1] = 0.5 + rand() * 16.0;
-      positions[i * 3 + 2] = Math.sin(angle) * radius;
-    }
-
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-    const mat = new THREE.PointsMaterial({
-      map: dustTex,
-      color: 0xf7e7c4,
-      size: 0.34,
-      transparent: true,
-      opacity: 0.58,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-
-    const mesh = new THREE.Points(geom, mat);
-    this.scene.add(mesh);
     this.disposables.push(geom, mat);
-    return { dustMesh: mesh, dustMat: mat };
+    return mat;
   }
 
-  private buildLightRays(rayTex: THREE.CanvasTexture): void {
-    const rayCount = 14;
-    const geom = new THREE.PlaneGeometry(7.5, 28);
+  /**
+   * 3D falling & drifting sakura blossom petals cascading gently from the overhanging tree.
+   */
+  private buildFallingPetals(count: number, texture: THREE.CanvasTexture): THREE.InstancedMesh {
+    const rand = seededRandom(8812);
+    const geom = new THREE.PlaneGeometry(0.22, 0.22);
     const mat = new THREE.MeshBasicMaterial({
-      map: rayTex,
-      color: 0xe6dec8,
+      map: texture,
+      color: new THREE.Color('#ffdce8'),
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.92,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
-    this.disposables.push(geom, mat);
 
-    for (let i = 0; i < rayCount; i++) {
-      const t = i / rayCount;
-      const pt = this.pathCurve.getPointAt(t);
-      const side = i % 2 === 0 ? 1 : -1;
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.position.set(pt.x + side * (8 + (i % 3) * 4), pt.y + 8.5, pt.z - side * 5);
-      mesh.rotation.z = side * 0.14;
-      mesh.rotation.y = (i / rayCount) * Math.PI * 2;
-      this.scene.add(mesh);
-      this.rayMeshes.push(mesh);
+    const mesh = new THREE.InstancedMesh(geom, mat, count);
+    this.petals = [];
+
+    for (let i = 0; i < count; i++) {
+      this.petals.push({
+        x: (rand() - 0.5) * 28,
+        y: 0.4 + rand() * 11,
+        z: (rand() - 0.5) * 28,
+        vx: -0.45 - rand() * 0.55,
+        vy: -0.35 - rand() * 0.45,
+        vz: (rand() - 0.5) * 0.35,
+        rx: rand() * Math.PI * 2,
+        ry: rand() * Math.PI * 2,
+        rz: rand() * Math.PI * 2,
+        vrx: (rand() - 0.5) * 2.2,
+        vry: (rand() - 0.5) * 2.4,
+        scale: 0.65 + rand() * 0.95,
+      });
     }
+
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
+    this.disposables.push(geom, mat);
+    return mesh;
   }
 
   private bindEvents(): void {
@@ -776,7 +929,6 @@ export class NightValleyEngine {
     window.addEventListener('touchstart', this.handleTouchStart, { passive: true });
     window.addEventListener('touchmove', this.handleTouchMove, { passive: true });
     window.addEventListener('touchend', this.handleTouchEnd, { passive: true });
-
     this.renderer.domElement.addEventListener('webglcontextlost', this.handleContextLost, false);
   }
 
@@ -795,7 +947,6 @@ export class NightValleyEngine {
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height);
     this.flowerMat.uniforms.uPixelRatio.value = pixelRatio;
-    this.leafMat.uniforms.uPixelRatio.value = pixelRatio;
 
     if (this.composer) {
       this.composer.setSize(width, height);
@@ -817,8 +968,8 @@ export class NightValleyEngine {
 
   private handleWheel = (e: WheelEvent): void => {
     if (this.scrollLocked) return;
-    this.scrollVelocity += e.deltaY * 0.000018;
-    this.scrollVelocity = THREE.MathUtils.clamp(this.scrollVelocity, -0.028, 0.028);
+    this.orbitVelocity += e.deltaY * 0.00055;
+    this.orbitVelocity = THREE.MathUtils.clamp(this.orbitVelocity, -0.055, 0.055);
   };
 
   private handleTouchStart = (e: TouchEvent): void => {
@@ -831,9 +982,8 @@ export class NightValleyEngine {
     const y = e.touches[0].clientY;
     const delta = this.lastTouchY - y;
     this.lastTouchY = y;
-    // 20x touch multiplier as in the Fernhollow valley spec
-    this.scrollVelocity += delta * 0.000018 * 20;
-    this.scrollVelocity = THREE.MathUtils.clamp(this.scrollVelocity, -0.032, 0.032);
+    this.orbitVelocity += delta * 0.0028;
+    this.orbitVelocity = THREE.MathUtils.clamp(this.orbitVelocity, -0.06, 0.06);
   };
 
   private handleTouchEnd = (): void => {
@@ -867,7 +1017,7 @@ export class NightValleyEngine {
     if (hex) {
       this.setAccentTint(hex);
     }
-    this.burstOrigin.copy(this.camera.position);
+    this.burstOrigin.set(0, 1.2, 0);
     this.burstProgress = 0.002;
   }
 
@@ -898,102 +1048,121 @@ export class NightValleyEngine {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     this.elapsed += dt;
 
-    // Smooth intro glide (0.9s before revealing HUD, echoing Fernhollow's onIntroDone)
     if (this.introProgress < 1) {
-      this.introProgress = Math.min(1, this.introProgress + dt * 1.25);
-      if (this.introProgress >= 0.85 && !this.introReported) {
+      this.introProgress = Math.min(1, this.introProgress + dt * 1.15);
+      if (this.introProgress >= 0.8 && !this.introReported) {
         this.introReported = true;
         this.callbacks.onIntroDone?.();
       }
     }
 
-    // Damp disperse state (hover transition)
     this.disperseValue = THREE.MathUtils.damp(this.disperseValue, this.hoverTarget, 2.8, dt);
 
-    // Gentle idle auto-drift along the valley (eases to a stop when dispersed)
-    const driftSpeed = this.reducedMotion ? 0.0012 : 0.0075;
-    const activeDrift = driftSpeed * (1 - this.disperseValue * 0.92);
+    // Smooth cinematic orbit around the resting warrior, greatsword, and flower meadow
+    const autoOrbitSpeed = this.reducedMotion ? 0.015 : 0.068;
+    const activeOrbit = autoOrbitSpeed * (1 - this.disperseValue * 0.85);
+    this.orbitAngle += activeOrbit * dt + this.orbitVelocity * dt * 22;
+    this.orbitVelocity = THREE.MathUtils.damp(this.orbitVelocity, 0, 4.0, dt);
+    const absSpeed = Math.abs(this.orbitVelocity) * 18;
 
-    this.scrollProgress = (this.scrollProgress + activeDrift * dt + this.scrollVelocity * dt * 60) % 1;
-    if (this.scrollProgress < 0) this.scrollProgress += 1;
-
-    // Friction on virtual scroll velocity
-    this.scrollVelocity = THREE.MathUtils.damp(this.scrollVelocity, 0, 4.2, dt);
-    const absSpeed = Math.abs(this.scrollVelocity) * 60;
-
-    // Smooth cursor tracking
-    this.smoothMouseNdc.x = THREE.MathUtils.damp(this.smoothMouseNdc.x, this.mouseNdc.x, 6.5, dt);
-    this.smoothMouseNdc.y = THREE.MathUtils.damp(this.smoothMouseNdc.y, this.mouseNdc.y, 6.5, dt);
+    // Smooth mouse meadow glide & parallax
+    this.smoothMouseNdc.x = THREE.MathUtils.damp(this.smoothMouseNdc.x, this.mouseNdc.x, 5.2, dt);
+    this.smoothMouseNdc.y = THREE.MathUtils.damp(this.smoothMouseNdc.y, this.mouseNdc.y, 5.2, dt);
     this.mouseActive = THREE.MathUtils.damp(this.mouseActive, this.targetMouseActive, 4.0, dt);
 
-    // Camera along spline path with subtle intro dip + cursor tilt
-    this.pathCurve.getPointAt(this.scrollProgress, _camPos);
-    const lookT = (this.scrollProgress + 0.032) % 1;
-    this.pathCurve.getPointAt(lookT, _lookTarget);
+    // Combine base orbit + mouse meadow exploration offset so moving cursor sweeps through the flowers around the warrior
+    const viewAngle = this.orbitAngle + this.smoothMouseNdc.x * 0.42;
+    const introPullback = (1 - Math.pow(this.introProgress, 2)) * 4.5;
+    const radius = 8.4 + introPullback - this.smoothMouseNdc.y * 0.9 + Math.sin(this.elapsed * 0.25) * 0.35;
+    const camY = 2.05 + this.smoothMouseNdc.y * 0.95 + introPullback * 0.32;
 
-    const introElevation = (1 - Math.pow(this.introProgress, 2)) * 4.2;
-    this.camera.position.set(
-      _camPos.x + this.smoothMouseNdc.x * 0.75,
-      _camPos.y + introElevation + this.smoothMouseNdc.y * 0.45,
-      _camPos.z
+    _camPos.set(Math.sin(viewAngle) * radius, camY, Math.cos(viewAngle) * radius);
+    const groundUnderCam = this.getTerrainHeight(_camPos.x, _camPos.z);
+    _camPos.y = Math.max(_camPos.y, groundUnderCam + 1.05);
+
+    this.camera.position.copy(_camPos);
+
+    // Gaze gently across the resting warrior & blossom tree with subtle mouse parallax shift
+    _lookTarget.set(
+      0.15 + this.smoothMouseNdc.x * 0.75,
+      1.75 + this.smoothMouseNdc.y * 0.38,
+      -0.25
     );
-
-    _lookTarget.x += this.smoothMouseNdc.x * 2.2;
-    _lookTarget.y += this.smoothMouseNdc.y * 1.25 - 0.5;
     this.camera.lookAt(_lookTarget);
 
-    // Subtle FOV breathing on fast scroll
-    const targetFov = 52 + Math.min(absSpeed * 5.2, 6.5) + this.disperseValue * 3.0;
+    // Subtle FOV breathing on hover/orbit speed
+    const targetFov = 46 + Math.min(absSpeed * 3.0, 5.0) + this.disperseValue * 2.5;
     if (Math.abs(this.camera.fov - targetFov) > 0.02) {
       this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 4.0, dt);
       this.camera.updateProjectionMatrix();
     }
 
-    // Accent tint smoothing
+    // Subtle peaceful breathing & canopy breeze on the resting warrior tableau
+    const breath = Math.sin(this.elapsed * 1.15);
+    this.warriorRig.warriorUpperBody.rotation.z = -0.34 + breath * 0.014;
+    this.warriorRig.warriorHead.rotation.z = 0.24 + Math.sin(this.elapsed * 0.75) * 0.02;
+    this.warriorRig.blossomCanopy.rotation.z = Math.sin(this.elapsed * 0.85) * 0.018;
+    this.warriorRig.blossomCanopy.rotation.x = Math.cos(this.elapsed * 0.65) * 0.012;
+
+    // Gentle wind sway on instanced grass meadow
+    if (this.grassMesh) {
+      this.grassMesh.rotation.y = Math.sin(this.elapsed * 0.22) * 0.004;
+    }
+
+    // Update falling sakura blossom petals
+    const liftForce = this.disperseValue * 2.6;
+    for (let i = 0; i < this.petals.length; i++) {
+      const p = this.petals[i];
+      p.x += (p.vx + Math.sin(this.elapsed * 0.9 + i) * 0.32) * dt;
+      p.y += (p.vy + liftForce) * dt;
+      p.z += (p.vz + Math.cos(this.elapsed * 0.7 + i) * 0.25) * dt;
+      p.rx += p.vrx * dt;
+      p.ry += p.vry * dt;
+
+      if (p.y < 0.1 || p.y > 14 || Math.hypot(p.x, p.z) > 19) {
+        p.x = -2.5 + ((i * 1.73) % 10) - 2.5;
+        p.y = 4.8 + (i % 7) * 0.65;
+        p.z = -3.0 + ((i * 2.41) % 9) - 2.5;
+      }
+
+      _dummy.position.set(p.x, p.y, p.z);
+      _dummy.rotation.set(p.rx, p.ry, p.rz);
+      _dummy.scale.setScalar(p.scale * (1 + this.disperseValue * 0.25));
+      _dummy.updateMatrix();
+      this.petalMesh.setMatrixAt(i, _dummy.matrix);
+    }
+    this.petalMesh.instanceMatrix.needsUpdate = true;
+
+    // Accent tint & burst uniforms
     this.accentColor.lerp(this.targetAccentColor, 1 - Math.exp(-3.2 * dt));
     this.accentMix = THREE.MathUtils.damp(this.accentMix, this.targetAccentMix, 3.0, dt);
 
-    // Celebration burst advancement
     if (this.burstProgress < 1) {
       this.burstProgress = Math.min(1, this.burstProgress + dt * 0.55);
     }
 
-    // Update shader uniforms
-    const updateMat = (mat: THREE.ShaderMaterial) => {
-      mat.uniforms.uTime.value = this.elapsed;
-      mat.uniforms.uMouseNdc.value.copy(this.smoothMouseNdc);
-      mat.uniforms.uMouseActive.value = this.mouseActive;
-      mat.uniforms.uDisperse.value = this.disperseValue;
-      mat.uniforms.uBurstProgress.value = this.burstProgress;
-      mat.uniforms.uBurstOrigin.value.copy(this.burstOrigin);
-      mat.uniforms.uAccentTint.value.copy(this.accentColor);
-      mat.uniforms.uTintMix.value = this.accentMix;
-    };
-    updateMat(this.flowerMat);
-    updateMat(this.leafMat);
+    this.skyMat.uniforms.uTime.value = this.elapsed;
+    this.skyMat.uniforms.uAccentTint.value.copy(this.accentColor);
+    this.skyMat.uniforms.uTintMix.value = this.accentMix;
 
-    // Gentle upward float on dust embers
-    this.dustMesh.rotation.y = this.elapsed * 0.015;
-    this.dustMesh.position.y = Math.sin(this.elapsed * 0.35) * 0.45;
-    this.dustMat.opacity = 0.52 + this.disperseValue * 0.35;
+    this.flowerMat.uniforms.uTime.value = this.elapsed;
+    this.flowerMat.uniforms.uMouseNdc.value.copy(this.smoothMouseNdc);
+    this.flowerMat.uniforms.uMouseActive.value = this.mouseActive;
+    this.flowerMat.uniforms.uDisperse.value = this.disperseValue;
+    this.flowerMat.uniforms.uBurstProgress.value = this.burstProgress;
+    this.flowerMat.uniforms.uBurstOrigin.value.copy(this.burstOrigin);
+    this.flowerMat.uniforms.uAccentTint.value.copy(this.accentColor);
+    this.flowerMat.uniforms.uTintMix.value = this.accentMix;
 
-    // Gentle sway on volumetric light rays
-    for (let i = 0; i < this.rayMeshes.length; i++) {
-      const ray = this.rayMeshes[i];
-      ray.rotation.y = this.elapsed * 0.06 + i * 0.7;
-    }
-
-    // Post-processing uniforms
     if (this.postPass) {
       this.postPass.uniforms.uTime.value = this.elapsed;
       this.postPass.uniforms.uSpeed.value = absSpeed;
       this.postPass.uniforms.uDisperse.value = this.disperseValue;
     }
     if (this.bloomPass) {
-      this.bloomPass.strength = 0.72 + this.disperseValue * 0.38 + (1 - this.burstProgress) * 0.35;
+      this.bloomPass.strength = 0.42 + this.disperseValue * 0.25 + (1 - this.burstProgress) * 0.25;
     }
 
-    // Render frame
     if (this.composer && !this.isSoftwareGl) {
       this.composer.render();
     } else {

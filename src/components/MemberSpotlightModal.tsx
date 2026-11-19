@@ -24,11 +24,13 @@ export function MemberSpotlightModal({
 }: MemberSpotlightModalProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [justBloomed, setJustBloomed] = useState(false);
+  const [bloomAnimKey, setBloomAnimKey] = useState(0);
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     setImgError(false);
     setJustBloomed(false);
+    setBloomAnimKey(0);
   }, [member.id]);
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export function MemberSpotlightModal({
 
   const handleBloomClick = () => {
     onSendBloom(member);
+    setBloomAnimKey((k) => k + 1);
     setJustBloomed(true);
     window.setTimeout(() => setJustBloomed(false), 1100);
   };
@@ -72,7 +75,7 @@ export function MemberSpotlightModal({
         {/* Top bar inside modal */}
         <div className="flex items-center justify-between gap-4 border-b border-[#f5efe2]/12 px-5 py-4 sm:px-8">
           <div className="flex items-center gap-3 text-xs tracking-[0.16em] uppercase text-[#f5efe2]/65">
-            <span className="tabular-nums">Chân dung {member.index} / 05</span>
+            <span className="tabular-nums">HUB Network · {member.index} / 05</span>
             <span aria-hidden="true">·</span>
             <span>19 Tháng 11</span>
           </div>
@@ -156,7 +159,7 @@ export function MemberSpotlightModal({
 
               <div className="rounded-lg border border-[#f5efe2]/12 bg-[#f5efe2]/[0.03] p-5">
                 <p className="text-xs tracking-[0.14em] uppercase text-[#f5efe2]/50">
-                  Lời chúc 19/11
+                  Lời chúc 19/11 dành riêng cho {member.name}
                 </p>
                 <p className="mt-2 text-[15px] leading-relaxed text-[#f5efe2]">
                   “{member.signatureWish}”
@@ -172,8 +175,15 @@ export function MemberSpotlightModal({
                 className="inline-flex items-center gap-2.5 rounded-full bg-[#f5efe2] px-5 py-2.5 text-sm font-medium text-[#151510] transition-transform hover:-translate-y-0.5 active:translate-y-0 whitespace-nowrap shrink-0"
               >
                 <Flower2 className="h-4 w-4" />
-                <span>{justBloomed ? 'Đã thả hoa phát sáng!' : 'Thả hoa chúc mừng'}</span>
-                <span className="tabular-nums text-xs opacity-70">({bloomCount})</span>
+                <span>{justBloomed ? 'Đã thả hoa chúc mừng!' : 'Thả hoa chúc mừng'}</span>
+                <span
+                  key={bloomAnimKey}
+                  className={`tabular-nums text-xs opacity-80 ${
+                    bloomAnimKey > 0 ? 'animate-bloom-pop' : ''
+                  }`}
+                >
+                  ({bloomCount})
+                </span>
               </button>
 
               <button

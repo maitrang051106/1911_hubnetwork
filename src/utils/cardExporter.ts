@@ -158,7 +158,7 @@ export async function downloadMemberCard(member: Member): Promise<void> {
   // Footer signature
   ctx.fillStyle = 'rgba(245, 239, 226, 0.48)';
   ctx.font = '500 18px Manrope, sans-serif';
-  ctx.fillText('THUNG LŨNG 19.11  ·  BẢN LĨNH, RẠNG NGỜI', width / 2, 1280);
+  ctx.fillText('HUB NETWORK  ·  19.11  ·  BẢN LĨNH, RẠNG NGỜI', width / 2, 1280);
 
   const link = document.createElement('a');
   link.download = `thiep-19-11-${member.id}.png`;

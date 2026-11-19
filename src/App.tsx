@@ -59,6 +59,8 @@ export default function App() {
 
   const [wishes, setWishes] = useState<WishItem[]>(loadSavedWishes);
   const [bloomCounts, setBloomCounts] = useState<Record<string, number>>(loadSavedBlooms);
+  const [lastBloomedId, setLastBloomedId] = useState<string | null>(null);
+  const [bloomPulseSeq, setBloomPulseSeq] = useState(0);
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -72,7 +74,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  // Mount isolated 3D Night Flower Valley engine + procedural Web Audio engine once
+  // Mount isolated 3D Sunset Wildflower Meadow & Resting Warrior engine + procedural Web Audio
   useEffect(() => {
     const container = canvasHostRef.current;
     if (!container) return;
@@ -91,7 +93,6 @@ export default function App() {
     });
     valleyRef.current = engine;
 
-    // Fallback reveal safety if RAF is throttled in background tab
     const safetyTimer = window.setTimeout(() => {
       setIsLoaded(true);
       setUiVisible(true);
@@ -148,7 +149,7 @@ export default function App() {
   };
 
   const handleEnterPortraits = () => {
-    valleyRef.current?.triggerCelebrationBurst('#f5d491');
+    valleyRef.current?.triggerCelebrationBurst('#f6bfd0');
     audioRef.current?.playBloomChime();
     setActiveView('portraits');
   };
@@ -164,9 +165,11 @@ export default function App() {
         }
         return next;
       });
+      setLastBloomedId(member.id);
+      setBloomPulseSeq((s) => s + 1);
       valleyRef.current?.triggerCelebrationBurst(member.accentHex);
       audioRef.current?.playBloomChime();
-      triggerToast(`Đã gửi một đóa hoa đêm phát sáng đến ${member.name}`);
+      triggerToast(`Đã gửi một đóa hoa chúc mừng đến ${member.name}`);
     },
     [triggerToast]
   );
@@ -194,11 +197,11 @@ export default function App() {
     });
 
     const recipientMember = MEMBERS.find((m) => m.id === draft.recipientId);
-    valleyRef.current?.triggerCelebrationBurst(recipientMember?.accentHex || '#f5d491');
+    valleyRef.current?.triggerCelebrationBurst(recipientMember?.accentHex || '#f6bfd0');
     audioRef.current?.playBloomChime();
     setActiveView('wishes');
     setWishFilterId(draft.recipientId === 'all' ? 'all' : draft.recipientId);
-    triggerToast(`Đã thả lời chúc gửi tới ${draft.recipientName}`);
+    triggerToast(`Đã gửi lời chúc tới ${draft.recipientName}`);
   };
 
   const selectedMember = useMemo(
@@ -226,13 +229,19 @@ export default function App() {
   );
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#030407] text-[#f5efe2]">
-      {/* Isolated Full-Screen 3D Night Flower Valley WebGL Container */}
+    <div className="relative h-full w-full overflow-hidden bg-[#18141d] text-[#f5efe2]">
+      {/* Isolated Full-Screen 3D Sunset Flower Meadow & Resting Warrior WebGL Container */}
       <div
         id="valley"
         ref={canvasHostRef}
         aria-hidden="true"
         className="fixed inset-0 z-0"
+      />
+
+      {/* Subtle top & bottom gradient scrim so typography stays crisp over the golden twilight sky */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-[5] bg-gradient-to-b from-black/45 via-black/10 to-black/50"
       />
 
       {/* Semantic Interface Layer (pointer-events-none so canvas stays interactive everywhere) */}
@@ -247,9 +256,9 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveView('hero')}
-            className="pointer-events-auto whitespace-nowrap shrink-0 text-left text-[20px] sm:text-[calc(26*var(--u))] font-medium tracking-[-0.02em] text-[#f5efe2] transition-opacity hover:opacity-80"
+            className="pointer-events-auto whitespace-nowrap shrink-0 text-left text-[19px] sm:text-[calc(25*var(--u))] font-medium tracking-[-0.02em] text-[#f5efe2] drop-shadow transition-opacity hover:opacity-80"
           >
-            Thung Lũng 19.11
+            HUB Network · 19.11
           </button>
 
           {/* Zone 2 + Zone 3: Navigation Links & Cream Pill CTA */}
@@ -262,8 +271,8 @@ export default function App() {
               onClick={() => setActiveView('hero')}
               className={`hidden md:inline-block whitespace-nowrap shrink-0 transition-opacity ${
                 activeView === 'hero'
-                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/60'
-                  : 'text-[#f5efe2]/75 hover:opacity-65'
+                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/70'
+                  : 'text-[#f5efe2]/80 hover:opacity-65'
               }`}
             >
               Khởi đầu
@@ -273,19 +282,19 @@ export default function App() {
               onClick={() => setActiveView('portraits')}
               className={`whitespace-nowrap shrink-0 transition-opacity ${
                 activeView === 'portraits'
-                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/60'
-                  : 'text-[#f5efe2]/75 hover:opacity-65'
+                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/70'
+                  : 'text-[#f5efe2]/80 hover:opacity-65'
               }`}
             >
-              Chân dung
+              HUB Men
             </button>
             <button
               type="button"
               onClick={() => setActiveView('wishes')}
               className={`hidden sm:inline-block whitespace-nowrap shrink-0 transition-opacity ${
                 activeView === 'wishes'
-                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/60'
-                  : 'text-[#f5efe2]/75 hover:opacity-65'
+                  ? 'text-[#f5efe2] underline underline-offset-8 decoration-[#f5efe2]/70'
+                  : 'text-[#f5efe2]/80 hover:opacity-65'
               }`}
             >
               Lời chúc
@@ -301,21 +310,21 @@ export default function App() {
           </nav>
         </header>
 
-        {/* VIEW 1: Full-Screen Cinematic Hero (Fernhollow Layout) */}
+        {/* VIEW 1: Full-Screen Cinematic Hero over the Resting Warrior & Sunset Flower Field */}
         {activeView === 'hero' && (
           <main className="pointer-events-none absolute inset-x-5 sm:inset-x-0 top-1/2 -translate-y-[46%] flex flex-col items-center text-center">
             <h1 className="hero-title">Bản lĩnh, rạng ngời.</h1>
             <p className="hero-caption">
               Chúc mừng Ngày Quốc Tế Đàn Ông 19/11.
               <br />
-              Gửi 5 chàng trai luôn tỏa sáng theo cách riêng.
+              Gửi những người đàn ông của HUB Network luôn tỏa sáng theo cách riêng.
             </p>
             <button
               type="button"
               onClick={handleEnterPortraits}
               onPointerEnter={handleHeroArrowEnter}
               onPointerLeave={handleHeroArrowLeave}
-              aria-label="Khám phá chân dung 5 thành viên"
+              aria-label="Khám phá những người đàn ông của HUB Network"
               className="hero-go pointer-events-auto"
             >
               <ArrowRight className="h-[22px] w-[22px] sm:h-[calc(22*var(--u))] sm:w-[calc(22*var(--u))] stroke-[1.6]" />
@@ -323,24 +332,32 @@ export default function App() {
           </main>
         )}
 
-        {/* VIEW 2: Editorial Portrait Showcase of the 5 Members */}
+        {/* VIEW 2: Editorial Portrait Showcase — Những người đàn ông của HUB Network */}
         {activeView === 'portraits' && (
-          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
+          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll bg-[#08070d]/58 pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
             <div className="mx-auto max-w-[1320px]">
               {/* Section Heading */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between border-b border-[#f5efe2]/15 pb-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between border-b border-[#f5efe2]/20 pb-6">
                 <div>
-                  <p className="text-xs font-medium tracking-[0.18em] uppercase text-[#f5efe2]/60">
+                  <p className="text-xs font-medium tracking-[0.18em] uppercase text-[#f5efe2]/72">
                     Ngày Quốc Tế Đàn Ông · 19 Tháng 11
                   </p>
                   <h1 className="mt-2 font-display text-4xl sm:text-5xl lg:text-6xl font-normal uppercase leading-[0.95] tracking-[-0.01em] text-[#f5efe2]">
-                    Năm gương mặt rạng ngời
+                    Những người đàn ông của HUB Network
                   </h1>
                 </div>
-                <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-[#f5efe2]/70">
-                  <span className="tabular-nums">5 chân dung</span>
+                <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-[#f5efe2]/80">
+                  <span className="tabular-nums">5 thành viên</span>
                   <span aria-hidden="true">·</span>
-                  <span className="tabular-nums">{totalBlooms} đóa hoa đã thả</span>
+                  <span className="tabular-nums">
+                    <span
+                      key={`total-${bloomPulseSeq}`}
+                      className={bloomPulseSeq > 0 ? 'animate-bloom-pop' : ''}
+                    >
+                      {totalBlooms}
+                    </span>{' '}
+                    đóa hoa đã thả
+                  </span>
                   <span aria-hidden="true">·</span>
                   <button
                     type="button"
@@ -356,12 +373,13 @@ export default function App() {
               <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
                 {MEMBERS.map((member) => {
                   const blooms = bloomCounts[member.id] ?? member.initialBlooms;
+                  const shouldPulse = bloomPulseSeq > 0 && lastBloomedId === member.id;
                   return (
                     <article
                       key={member.id}
                       onMouseEnter={() => valleyRef.current?.setAccentTint(member.accentHex)}
                       onMouseLeave={() => valleyRef.current?.setAccentTint(null)}
-                      className="group relative flex flex-col overflow-hidden rounded-lg border border-[#f5efe2]/15 bg-[#070a10]/90 transition-transform duration-300 ease-out hover:-translate-y-1.5 hover:border-[#f5efe2]/45"
+                      className="group relative flex flex-col overflow-hidden rounded-lg border border-[#f5efe2]/18 bg-[#0b0a12]/90 transition-transform duration-300 ease-out hover:-translate-y-1.5 hover:border-[#f5efe2]/50"
                     >
                       <button
                         type="button"
@@ -392,10 +410,10 @@ export default function App() {
                           )}
 
                           {/* Measured Contrast Scrim */}
-                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#070a10] via-[#070a10]/20 to-transparent" />
+                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0a12] via-[#0b0a12]/25 to-transparent" />
 
                           {/* Top Index Overlay */}
-                          <div className="absolute top-3.5 left-4 right-4 flex items-center justify-between text-[11px] font-medium tracking-[0.18em] uppercase text-[#f5efe2]/85">
+                          <div className="absolute top-3.5 left-4 right-4 flex items-center justify-between text-[11px] font-medium tracking-[0.18em] uppercase text-[#f5efe2]/88">
                             <span className="tabular-nums drop-shadow">{member.index}</span>
                             <span
                               className="h-2 w-2 rounded-full"
@@ -409,17 +427,25 @@ export default function App() {
                             <h2 className="font-display text-3xl font-normal uppercase leading-none tracking-[-0.01em] text-[#f5efe2]">
                               {member.name}
                             </h2>
-                            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#f5efe2]/78">
+                            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#f5efe2]/82">
                               {member.epithet}
                             </p>
                           </div>
                         </div>
 
                         {/* Card Footer Action Row */}
-                        <div className="flex items-center justify-between gap-2 border-t border-[#f5efe2]/10 px-4 py-3 text-xs text-[#f5efe2]/72">
-                          <span className="tabular-nums">{blooms} đóa hoa</span>
+                        <div className="flex items-center justify-between gap-2 border-t border-[#f5efe2]/12 px-4 py-3 text-xs text-[#f5efe2]/78">
+                          <span className="tabular-nums">
+                            <span
+                              key={`${member.id}-${shouldPulse ? bloomPulseSeq : 0}`}
+                              className={shouldPulse ? 'animate-bloom-pop' : ''}
+                            >
+                              {blooms}
+                            </span>{' '}
+                            đóa hoa
+                          </span>
                           <span className="inline-flex items-center gap-1.5 font-medium text-[#f5efe2] transition-transform duration-200 group-hover:translate-x-0.5">
-                            Mở thiệp
+                            Xem lời chúc
                             <ArrowRight className="h-3.5 w-3.5" />
                           </span>
                         </div>
@@ -434,12 +460,12 @@ export default function App() {
 
         {/* VIEW 3: Glowing Wishes Wall */}
         {activeView === 'wishes' && (
-          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
+          <main className="pointer-events-auto absolute inset-0 overflow-y-auto valley-scroll bg-[#08070d]/58 pt-24 pb-28 sm:pt-28 sm:pb-28 px-5 sm:px-10 lg:px-14">
             <div className="mx-auto max-w-[1160px]">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b border-[#f5efe2]/15 pb-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b border-[#f5efe2]/20 pb-6">
                 <div>
-                  <p className="text-xs font-medium tracking-[0.18em] uppercase text-[#f5efe2]/60">
-                    Tường lời chúc 19/11
+                  <p className="text-xs font-medium tracking-[0.18em] uppercase text-[#f5efe2]/70">
+                    HUB Network · Tường lời chúc 19/11
                   </p>
                   <h1 className="mt-2 font-display text-4xl sm:text-5xl lg:text-6xl font-normal uppercase leading-[0.95] tracking-[-0.01em]">
                     Những điều muốn gửi trao
@@ -472,7 +498,7 @@ export default function App() {
                   className={`rounded-md px-3.5 py-2 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                     wishFilterId === 'all'
                       ? 'bg-[#f5efe2] text-[#151510]'
-                      : 'border border-[#f5efe2]/18 bg-[#070a10]/85 text-[#f5efe2]/78 hover:border-[#f5efe2]/45 hover:text-[#f5efe2]'
+                      : 'border border-[#f5efe2]/20 bg-[#0b0a12]/88 text-[#f5efe2]/82 hover:border-[#f5efe2]/50 hover:text-[#f5efe2]'
                   }`}
                 >
                   Tất cả ({wishes.length})
@@ -490,7 +516,7 @@ export default function App() {
                     className={`rounded-md px-3.5 py-2 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                       wishFilterId === member.id
                         ? 'bg-[#f5efe2] text-[#151510]'
-                        : 'border border-[#f5efe2]/18 bg-[#070a10]/85 text-[#f5efe2]/78 hover:border-[#f5efe2]/45 hover:text-[#f5efe2]'
+                        : 'border border-[#f5efe2]/20 bg-[#0b0a12]/88 text-[#f5efe2]/82 hover:border-[#f5efe2]/50 hover:text-[#f5efe2]'
                     }`}
                   >
                     {member.name}
@@ -505,22 +531,22 @@ export default function App() {
                   return (
                     <article
                       key={wish.id}
-                      className="flex flex-col justify-between rounded-lg border border-[#f5efe2]/15 bg-[#080b12]/90 p-6"
+                      className="flex flex-col justify-between rounded-lg border border-[#f5efe2]/18 bg-[#0b0a12]/92 p-6"
                     >
                       <div>
-                        <div className="flex items-center gap-2 text-xs text-[#f5efe2]/58">
-                          <span style={{ color: target?.accentHex || '#f5d491' }}>
+                        <div className="flex items-center gap-2 text-xs text-[#f5efe2]/62">
+                          <span style={{ color: target?.accentHex || '#f6c270' }}>
                             Gửi {wish.recipientName}
                           </span>
                           <span aria-hidden="true">·</span>
                           <span className="tabular-nums">{wish.createdAt}</span>
                         </div>
-                        <p className="mt-4 text-[15px] leading-relaxed text-[#f5efe2]/90">
+                        <p className="mt-4 text-[15px] leading-relaxed text-[#f5efe2]/92">
                           “{wish.message}”
                         </p>
                       </div>
 
-                      <div className="mt-6 flex items-center justify-between border-t border-[#f5efe2]/10 pt-3.5 text-xs text-[#f5efe2]/60">
+                      <div className="mt-6 flex items-center justify-between border-t border-[#f5efe2]/12 pt-3.5 text-xs text-[#f5efe2]/65">
                         <span>Từ {wish.author}</span>
                         {target && (
                           <button
@@ -529,7 +555,7 @@ export default function App() {
                               setSelectedMemberId(target.id);
                               valleyRef.current?.setAccentTint(target.accentHex);
                             }}
-                            className="text-[#f5efe2]/85 underline underline-offset-4 hover:text-[#f5efe2]"
+                            className="text-[#f5efe2]/88 underline underline-offset-4 hover:text-[#f5efe2]"
                           >
                             Xem chân dung
                           </button>
@@ -544,26 +570,26 @@ export default function App() {
         )}
 
         {/* Bottom-Right Corner HUD (Fernhollow signature footer bar) */}
-        <div className="pointer-events-none fixed inset-x-5 bottom-6 sm:inset-x-auto sm:right-[calc(44*var(--u))] sm:bottom-[calc(40*var(--u))] z-20 flex items-center justify-center sm:justify-end gap-[18px] text-[11px] sm:text-[calc(12.5*var(--u))] font-medium uppercase tracking-[0.16em] text-[#f5efe2]/90">
+        <div className="pointer-events-none fixed inset-x-5 bottom-6 sm:inset-x-auto sm:right-[calc(44*var(--u))] sm:bottom-[calc(40*var(--u))] z-20 flex items-center justify-center sm:justify-end gap-[18px] text-[11px] sm:text-[calc(12.5*var(--u))] font-medium uppercase tracking-[0.16em] text-[#f5efe2]/95">
           {activeView === 'hero' ? (
-            <span>Cuộn để dạo bước</span>
+            <span>Di chuyển &amp; cuộn để xoay cảnh</span>
           ) : (
             <button
               type="button"
               onClick={() => setActiveView('hero')}
               className="pointer-events-auto transition-opacity hover:opacity-70"
             >
-              Về thung lũng
+              Về cánh đồng hoa
             </button>
           )}
 
-          <span className="h-[22px] sm:h-[calc(26*var(--u))] w-px bg-[#f5efe2]/45" aria-hidden="true" />
+          <span className="h-[22px] sm:h-[calc(26*var(--u))] w-px bg-[#f5efe2]/55" aria-hidden="true" />
 
           <button
             type="button"
             onClick={handleToggleSound}
             aria-pressed={isSoundOn}
-            aria-label={isSoundOn ? 'Tắt nhạc nền thung lũng' : 'Bật nhạc nền thung lũng'}
+            aria-label={isSoundOn ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
             className="pointer-events-auto grid h-[28px] w-[28px] sm:h-[calc(28*var(--u))] sm:w-[calc(28*var(--u))] place-items-center text-[#f5efe2] transition-opacity hover:opacity-75"
           >
             <svg
@@ -590,7 +616,7 @@ export default function App() {
           <div
             role="status"
             aria-live="polite"
-            className="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 sm:bottom-[calc(40*var(--u))] sm:left-[calc(44*var(--u))] sm:translate-x-0 z-30 rounded-full border border-[#f5efe2]/25 bg-[#080a10]/95 px-5 py-2.5 text-xs font-medium tracking-wide text-[#f5efe2] shadow-lg"
+            className="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 sm:bottom-[calc(40*var(--u))] sm:left-[calc(44*var(--u))] sm:translate-x-0 z-30 rounded-full border border-[#f5efe2]/25 bg-[#0b0a12]/95 px-5 py-2.5 text-xs font-medium tracking-wide text-[#f5efe2] shadow-lg"
           >
             {toastMessage}
           </div>
@@ -620,16 +646,16 @@ export default function App() {
         />
       )}
 
-      {/* Initial Obsidian Loader Curtain (fades cleanly once WebGL boots) */}
+      {/* Initial Loader Curtain (fades cleanly once WebGL boots) */}
       {loaderMounted && (
         <div
           aria-hidden="true"
-          className={`fixed inset-0 z-50 grid place-items-center bg-[#030407] pointer-events-none transition-opacity duration-1000 ease-out ${
+          className={`fixed inset-0 z-50 grid place-items-center bg-[#18141d] pointer-events-none transition-opacity duration-1000 ease-out ${
             isLoaded ? 'opacity-0' : 'opacity-100'
           }`}
         >
-          <span className="text-xs font-medium uppercase tracking-[0.26em] text-[#f5efe2]/75">
-            19.11
+          <span className="text-xs font-medium uppercase tracking-[0.26em] text-[#f5efe2]/80">
+            HUB Network · 19.11
           </span>
         </div>
       )}
